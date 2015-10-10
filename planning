@@ -1,0 +1,37 @@
+-must sniff packets
+-must be hidden (process)
+-must be able to allow arbitrary execution of commands
+-requires authentication for commands
+	  - intiate session, require key/password
+	  - if matched, continue session
+
+DAMNPANDIMENSIONALMICE
+encrypt with sha 256 and key text
+decode with key text at other end
+if correct, intiate bd session
+
+commands submitted in form
+Byte for packet num
+rest data
+----------------------> encrypt sha256
+
+Byte for packet num
+response to command
+----------------------> encrypt sha256
+
+on client exit send
+CLIENTSHUTDOWN
+
+clear client authentication
+return to idle
+
+backdoor
+encryption
+check for knock
+submit terminal commands, read output
+2 way communication
+
+client
+2 way communication
+encryption
+send/recieve system data
