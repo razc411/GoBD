@@ -28,11 +28,11 @@ func encrypt_data(data string) []byte {
 	return ciphertext;
 }
 
-func decrypt_data(data []byte) []byte {
+func decrypt_data(data []byte) string {
 	
 	cfbdec := cipher.NewCFBDecrypter(block, iv);
 	plaintextCopy := make([]byte, len(data));
 	cfbdec.XORKeyStream(plaintextCopy, data);
 
-	return plaintextCopy;
+	return string(plaintextCopy[:]);
 }
