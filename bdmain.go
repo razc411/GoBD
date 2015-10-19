@@ -81,8 +81,11 @@ func main(){
 		arguments[4] = fmt.Sprintf("-iface=%s", *interfacePtr);
 		arguments[5] = fmt.Sprintf("-lport=%d", *lPortPtr);
 		arguments[6] = fmt.Sprint("-visible=invalid");
-		
-		_, err := os.StartProcess("./GoBD", arguments, &procAttr);
+		if runtime.GOOS == "windows"{
+			_, err := os.StartProcess("GoBD", arguments, &procAttr);
+		} else {
+			_, err := os.StartProcess("./GoBD", arguments, &procAttr);
+		}
 		checkError(err);
 		return;
 	}
@@ -115,9 +118,16 @@ func intiateClient(ip string, port, lport int){
 	
 	for {
 		fmt.Print("Please input the authentication code: ");
-		authcode, _ := terminal.ReadPassword(0);
-		authstr := string(authcode);
-
+		var authstr string;
+		if runtime.GOOS == "windows" {
+			reader := bufio.NewReader(os.Stdin);
+			authstr, _ := reader.ReadString('\n');
+			authstr = strings.TrimSpace(authstr);
+		} else {			
+			authcode, _ := terminal.ReadPassword(0);
+			authstr = string(authcode);
+		}
+		
 		if authstr == passwd {
 			sendEncryptedData(port, authstr, ip);
 			break;
