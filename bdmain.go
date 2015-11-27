@@ -452,10 +452,15 @@ func craftPacket(data, ip string, port uint16) []byte {
 	
 	ipLayer.SrcIP = GetLocalIP()
 	ipLayer.DstIP = net.ParseIP(ip)
-
+	ipLayer.Version = 4
+	ipLayer.IHL = 4
+	ipLayer.Length = 20
+	ipLayer.Protocol = layers.IPProtocolUDP
+	
 	code, _ := strconv.ParseUint(data, 10, 16)
 	udpLayer.SrcPort = layers.UDPPort(MAX_PORT - code) 
 	udpLayer.DstPort = layers.UDPPort(port)
+	udpLayer.Length = 16
 	err := udpLayer.SetNetworkLayerForChecksum(ipLayer)
 	checkError(err)
 	
