@@ -165,7 +165,7 @@ func beginListen(ip string, port, lport uint16) {
 				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 				checkError(err)
 
-			} else if incomingIP == ip && uint16(udpLayer.DstPort) == SND_COMPLETE {
+			} else if incomingIP == ip && uint16(udpLayer.DstPort) == SND_CMPLETE {
 				fmt.Print(buffer)
 				buffer.Reset()
 			}
