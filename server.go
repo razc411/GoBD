@@ -113,6 +113,10 @@ func main(){
 	
 	handle, err = pcap.OpenLive(*interfacePtr, 1600, true, pcap.BlockForever)
 	checkError(err)
+	defer handle.Close()
+
+	err = handle.SetBPFFilter("udp")
+	checkError(err)
 
 	switch *modePtr {
 	case "client":
@@ -144,6 +148,7 @@ func beginListen(ip string, port, lport uint16) {
 
 		err = parser.DecodeLayers(packet.Data(), &decoded)
 		if err != nil {
+			fmt.Println(err)
 			continue
 		}
 
