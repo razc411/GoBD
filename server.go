@@ -260,10 +260,10 @@ func monitorFile(ip, filename string, port uint16){
 	for {
 		time.Sleep(1000 * time.Millisecond);
 		if _, err := os.Stat(filename); err == nil {
+		
 			fmt.Printf("Found file %s\n", filename)
-			var target string
 
-			fmt.Fprintf(target, "%s:%d", ip, port)
+			target := fmt.Sprintf("%s:%d", ip, port)
 			conn, err  := net.Dial("tcp", target)
 			checkError(err)
 
