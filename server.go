@@ -135,11 +135,12 @@ func beginListen(ip string, port, lport uint16) {
 	var ipLayer layers.IPv4
 	var ethLayer layers.Ethernet
 	var udpLayer layers.UDP
+	var payload gopacket.Payload
 
 	i = 0
 	buffer := make([]byte, 10000000)
-	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer)
-	decoded := make([]gopacket.LayerType, 0, 3)
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer, &payload)
+	decoded := make([]gopacket.LayerType, 0, 4)
 	
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for {
