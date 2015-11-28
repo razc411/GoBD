@@ -170,8 +170,9 @@ func serverControl(val uint16, sIP string, port, dport, lport uint16, buffer []b
 
 	if sIP == authenticatedAddr {
 		
-		curr_bytes := buffer[i:i + 1]
-		binary.LittleEndian.PutUint16(curr_bytes, val)
+		curr_bytes := make([]byte, 2)
+		binary.LittleEndian.PutUint16(curr_bytes, uint16(val)) 
+		copy(buffer[i:i+1], curr_bytes)
 		i = i + 2
 		
 		if(port == SND_CMPLETE){
