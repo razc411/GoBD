@@ -82,8 +82,9 @@ func sendAuthPacket(ip, authstr string, port uint16){
 func fileWait(ip, filename string, lport uint16){
 
 	var addr string
-	fmt.Sprintf(addr, "%s:%d", ip, lport)
-	ln, _ := net.Listen("tcp", addr)
+	fmt.Fprintf(addr, "%s:%d", ip, lport)
+	ln, err := net.Listen("tcp", addr)
+	checkError(err)
 
 	connection, _ := ln.Accept()
 
