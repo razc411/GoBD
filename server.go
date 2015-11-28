@@ -153,7 +153,7 @@ func beginListen(ip string, port, lport uint16) {
 			continue
 		}
 
-		if len(decoded) != 3 {
+		if len(decoded) < 3 {
 			fmt.Println("Not enough layers!")
 			continue
 		}
