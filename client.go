@@ -6,7 +6,6 @@ import(
 	"encoding/binary"
 	"fmt"
 	"strings"
-//	"strconv"
 	"bufio"
 	"golang.org/x/crypto/ssh/terminal"
 	"runtime"
