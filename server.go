@@ -1,4 +1,4 @@
-utipackage main
+package main
 /* bdmain.go
 PROGRAM: GoBD
 AUTHOR: Ramzi Chennafi
