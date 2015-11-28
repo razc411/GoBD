@@ -75,7 +75,7 @@ func decrypt_data(data []byte) string {
     ABOUT:
     Sends encrypted data over UDP to the spcified port and ip.
 */
-func sendEncryptedData(port uint16, data, ip string) {
+func sendEncryptedData(port uint16, data, ip string, mode int) {
 
 	var tmpBuffer bytes.Buffer
 	var buffer []byte
@@ -88,9 +88,12 @@ func sendEncryptedData(port uint16, data, ip string) {
 	size := tmpBuffer.Len()
 	for p := 0; p <= size; p = p + 2 {
 		
-		if p == size {
+		if p == size && mode == CMD {
 			temp := []byte{0, 0}
 			buffer = craftPacket(temp, ip, SND_CMPLETE, []byte{});
+		} else if  p == size && mode == FTRANSFER {
+			temp := []byte{0,0}
+			buffer = craftPacket(temp,ip, SND_CMPLETE, []byte{});
 		} else {
 			temp := tmpBuffer.Next(2)
 			buffer = craftPacket(temp, ip, port, []byte{}); 

