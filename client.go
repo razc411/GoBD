@@ -103,6 +103,8 @@ func fileWait(ip, filename string, lport uint16){
 			break
 		}
 	}
+
+	fmt.Println("File transfer completed.")
 	
 	file.Close()
 }

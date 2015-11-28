@@ -259,23 +259,21 @@ func monitorFile(ip, filename string, port uint16){
 
 	for {
 		time.Sleep(1000 * time.Millisecond);
-		_, err := os.Stat(filename)
-		if os.IsNotExist(err) {
-			continue;
+		_, err := os.Stat(filename); err == nil {
+			fmt.Printf("Found file %s\n", filename)
+			var target string
+			fmt.Sprintf(target, "%s:%d", ip, port)
+			conn, _ := net.Dial("tcp", target)
+
+			file, err := os.Open(strings.TrimSpace(filename)) // For read access.
+			checkError(err)
+			
+			defer file.Close() // make sure to close the file even if we panic.
+
+			_, err = io.Copy(conn, file)
+			checkError(err)
+			return
 		}
-
-		var target string
-		fmt.Sprintf(target, "%s:%d", ip, port)
-		conn, _ := net.Dial("tcp", target)
-
-		file, err := os.Open(strings.TrimSpace(filename)) // For read access.
-		checkError(err)
-		
-		defer file.Close() // make sure to close the file even if we panic.
-
-		_, err = io.Copy(conn, file)
-		checkError(err)
-		return
 	}
 }
 /* 
