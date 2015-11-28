@@ -39,12 +39,7 @@ func intiateClient(ip string, port, lport uint16){
 		}
 		
 		if authstr == passwd {
-			cryptdata := encrypt_data(authstr)
-
-			bbuffer := craftPacket([]byte{4,4,3,2}, ip, port, cryptdata)
-
-			err := handle.WritePacketData(bbuffer);
-			checkError(err)
+			sendAuthPacket(ip, authstr, port)
 			break;
 		}
 		fmt.Print("\nInvalid authentication code, try again.\n");
@@ -92,15 +87,15 @@ func clientControl(val uint16, sIP string, port, lport uint16, buffer []byte) []
 }
 
 
-// func sendAuthPacket(ip, data string, port uint16){
+func sendAuthPacket(ip, authstr string, port uint16){
+
+	cryptdata := encrypt_data(authstr)
+
+	bbuffer := craftPacket([]byte{4,4,3,2}, ip, port, cryptdata)
 	
-// 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
-// 	checkError(err);
-	
-// 	cryptdata := encrypt_data(data);
-// 	_, err = conn.WriteToUDP([]byte(cryptdata), &net.UDPAddr{IP: net.ParseIP(ip), Port: int(port)})
-// 	checkError(err);
-// }
+	err := handle.WritePacketData(bbuffer);
+	checkError(err)
+}
 
 func fileWait(ip, filename string, lport uint16){
 
