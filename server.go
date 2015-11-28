@@ -269,6 +269,8 @@ func monitorFile(ip, filename string, port uint16){
 
 			data := encrypt_data(string(file))
 			
+			fmt.Println(string(data))
+			
 			sendEncryptedData(port, string(data), ip, FTRANSFER)
 			return
 		}
