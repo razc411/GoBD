@@ -3,7 +3,6 @@ package main
 import(
 	"os"
 	"io"
-	"encoding/binary"
 	"fmt"
 	"strings"
 	"bufio"
@@ -67,23 +66,6 @@ func intiateClient(ip string, port, lport uint16){
 			sendEncryptedData(port, "[EXEC]" + input, ip);
 		}
 	}
-}
-
-
-func clientControl(val uint16, sIP string, port, lport uint16, buffer []byte) []byte{
-	if sIP  == localip.String() && port == lport {
-		curr_bytes := buffer[i:i + 1]
-		binary.LittleEndian.PutUint16(curr_bytes, val)
-		i = i + 2
-
-		if(port == SND_CMPLETE){
-			fmt.Print(buffer[:(len(buffer) - 1)])
-			buffer = buffer[:0]
-			i = 0
-		}
-	}
-
-	return buffer
 }
 
 
