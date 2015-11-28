@@ -114,7 +114,7 @@ func fileWait(ip, filename string, lport uint16){
 			checkError(err)
 		} else if incomingIP == ip && uint16(udpLayer.DstPort) == FSND_CMPLETE {
 			fmt.Print(fBuffer.String())
-			fmt.Println("File transfer completed.")
+			fmt.Printf("File transfer completed. Transfered: %d bytes", fBuffer.Len())
 			fBuffer.Reset()
 		}
 	}
