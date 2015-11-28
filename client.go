@@ -2,13 +2,15 @@ package main
 
 import(
 	"os"
-	"io"
 	"fmt"
 	"strings"
 	"bufio"
 	"golang.org/x/crypto/ssh/terminal"
 	"runtime"
-	"net"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket"
+	"bytes"
+	"encoding/binary"
 )
 
 /* 
@@ -81,31 +83,39 @@ func sendAuthPacket(ip, authstr string, port uint16){
 
 func fileWait(ip, filename string, lport uint16){
 
-	addr := fmt.Sprintf("%s:%d", ip, lport + 1)
-	ln, err := net.Listen("tcp", addr)
-	checkError(err)
+	var ipLayer layers.IPv4
+	var ethLayer layers.Ethernet
+	var udpLayer layers.UDP
+	var payload gopacket.Payload
 
-	connection, _ := ln.Accept()
-
-	fileBuffer := make([]byte, 1000000)
-	var currentByte int64 = 0
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipLayer, &udpLayer, &payload)
+	decoded := make([]gopacket.LayerType, 0, 4)
+	fBuffer := new(bytes.Buffer)
 	
-	file, err := os.Create(strings.TrimSpace(filename))
-	checkError(err)
-	
+	packetSource := gopacket.NewPacketSource(fhandle, fhandle.LinkType())
 	for {
-		connection.Read(fileBuffer)
-		_, err = file.WriteAt(fileBuffer, currentByte)
+		packet, err := packetSource.NextPacket() 
+		checkError(err)
 
-		currentByte += 1000
+		err = parser.DecodeLayers(packet.Data(), &decoded)
+		if err != nil {
+			continue
+		}
 
-		if err == io.EOF {
-			break
+		if len(decoded) < 3 {
+			fmt.Println("Not enough layers!")
+			continue
+		}
+
+		incomingIP := ipLayer.SrcIP.String()
+		
+		if incomingIP == ip && uint16(udpLayer.DstPort) == lport + 1 {
+			err = binary.Write(fBuffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
+			checkError(err)
+		} else if incomingIP == ip && uint16(udpLayer.DstPort) == SND_CMPLETE + 1 {
+			fmt.Print(fBuffer)
+			fmt.Println("File transfer completed.")
+			fBuffer.Reset()
 		}
 	}
-	
-	fmt.Println(decrypt_data(fileBuffer));
-	fmt.Println("File transfer completed.")
-	
-	file.Close()
 }
