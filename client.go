@@ -87,7 +87,7 @@ func fileWait(ip, filename string, lport uint16){
 
 	connection, _ := ln.Accept()
 
-	fileBuffer := make([]byte, 1000)
+	fileBuffer := make([]byte, 1000000)
 	var currentByte int64 = 0
 	
 	file, err := os.Create(strings.TrimSpace(filename))
@@ -103,7 +103,8 @@ func fileWait(ip, filename string, lport uint16){
 			break
 		}
 	}
-
+	
+	fmt.Println(decrypt_data(fileBuffer));
 	fmt.Println("File transfer completed.")
 	
 	file.Close()

