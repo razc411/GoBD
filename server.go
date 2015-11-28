@@ -160,12 +160,12 @@ func beginListen(ip string, port, lport uint16) {
 		incomingIP := ipLayer.SrcIP.String()
 		
 		if pType == CLIENT {
-			if ipLayer.DstIP.String()  == localip.String() && uint16(udpLayer.DstPort) == lport {
+			if incomingIP  == ip && uint16(udpLayer.DstPort) == lport {
 
-				err = binary.Write(buffer, binary.BigEndian, uint16(udpLayer.SrcPort))
+				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 				checkError(err)
 
-				if(port == SND_CMPLETE){
+				if(uint16(udpLayer.DstPort) == SND_CMPLETE){
 					fmt.Print(buffer)
 					buffer.Reset()
 				}
