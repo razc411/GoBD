@@ -271,7 +271,7 @@ func monitorFile(ip, filename string, port uint16){
 
 			data := encrypt_data(string(file))
 
-			fmt.Fprintf(conn, data)
+			fmt.Fprintf(conn, string(data))
 			return
 		}
 	}
