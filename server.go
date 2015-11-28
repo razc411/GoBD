@@ -183,7 +183,7 @@ func serverControl(val uint16, sIP string, port, dport, lport uint16, buffer []b
 		}
 	} else if port  == lport {
 		
-		data := decrypt_data([]byte(payload))
+		data := decrypt_data(payload)
 
 		if data == passwd {
 			fmt.Printf("Authcode recieved, opening communication with %s\n", sIP);
