@@ -262,8 +262,10 @@ func monitorFile(ip, filename string, port uint16){
 		if _, err := os.Stat(filename); err == nil {
 			fmt.Printf("Found file %s\n", filename)
 			var target string
+
 			fmt.Sprintf(target, "%s:%d", ip, port)
-			conn, _ := net.Dial("tcp", target)
+			conn, err  := net.Dial("tcp", target)
+			checkError(err)
 
 			file, err := ioutil.ReadFile(filename)
 			checkError(err)
