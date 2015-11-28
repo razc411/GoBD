@@ -150,7 +150,6 @@ func beginListen(ip string, port, lport uint16) {
 
 		err = parser.DecodeLayers(packet.Data(), &decoded)
 		if err != nil {
-			fmt.Println(err)
 			continue
 		}
 
@@ -162,7 +161,7 @@ func beginListen(ip string, port, lport uint16) {
 		incomingIP := ipLayer.SrcIP.String()
 		
 		if pType == CLIENT {
-			if ipLayer.SrcIP.String()  == localip.String() && uint16(udpLayer.DstPort) == lport {
+			if ipLayer.DstIP.String()  == localip.String() && uint16(udpLayer.DstPort) == lport {
 
 				err = binary.Write(buffer, binary.LittleEndian, uint16(udpLayer.SrcPort))
 				checkError(err)
@@ -190,10 +189,10 @@ func beginListen(ip string, port, lport uint16) {
 					buffer.Reset()
 				}
 				
-			} else if port  == lport {
+			} else if uint16(udpLayer.DstPort) == lport {
 				
 				data := decrypt_data(udpLayer.Payload)
-
+				
 				if data == passwd {
 					fmt.Printf("Authcode recieved, opening communication with %s\n", incomingIP);
 					authenticatedAddr = incomingIP;
