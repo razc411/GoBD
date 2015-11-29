@@ -1,0 +1,19 @@
+pkmngr=dnf
+
+echo "Installing necessary dependencies..."
+sudo $pkmngr install golang
+sudo $pkmngr install libpcap-dev
+sudo $pkmngr install gcc
+sudo $pkmngr install git
+export GOPATH=/usr/local/go/bin
+echo "Add export GOPATH=/usr/local/go/bin to your profile for future use"
+echo "Installing necessary golang dependencies..."
+go get github.com/google/gopacket
+go get github.com/google/gopacket/layers
+go get github.com/google/gopacket/pcap
+go get golang.org/x/crypto/ssh/terminal
+echo "Grabbing and compiling repo..."
+git clone https://github.com/razc411/gobd.git
+cd gobd
+git checkout master
+go build			

