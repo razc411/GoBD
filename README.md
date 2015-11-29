@@ -72,8 +72,6 @@ It's important that you set the ports to different numbers, a lot of the packet 
 
 When running the server in hidden mode, it will disconnect from any terminal and run as a standalone process.
 
-There is a limit to data sent from client to server, any command over 65536 byte will be cut short,
-though you shouldnt need to send such a massively long command.
 --------------------
 <h1>Client Usage</h1>
 --------------------
