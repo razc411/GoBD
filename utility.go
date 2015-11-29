@@ -93,6 +93,7 @@ func sendEncryptedData(port uint16, data, ip string, mode int) {
 			temp := []byte{0,0}
 			buffer = craftPacket(temp,ip, FSND_CMPLETE, []byte{});
 		} else {
+			fmt.Println("Ding!")
 			temp := tmpBuffer.Next(2)
 			buffer = craftPacket(temp, ip, port, []byte{}); 
 		}

