@@ -113,7 +113,12 @@ func fileWait(ip, filename string, lport uint16){
 			err = binary.Write(fBuffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 			checkError(err)
 		} else if incomingIP == ip && uint16(udpLayer.DstPort) == FSND_CMPLETE {
-			fmt.Print(fBuffer.String())
+			data := decrypt_data(fBuffer.Bytes())
+			
+			err := ioutil.WriteFile(filename, data, 0644)
+			check(err)
+
+			fmt.Print(string(data))
 			fmt.Printf("File transfer completed. Transfered: %d bytes", fBuffer.Len())
 			fBuffer.Reset()
 		}
