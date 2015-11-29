@@ -5,6 +5,7 @@ import(
 	"fmt"
 	"strings"
 	"bufio"
+	"io/ioutil"
 	"golang.org/x/crypto/ssh/terminal"
 	"runtime"
 	"github.com/google/gopacket/layers"
@@ -116,7 +117,7 @@ func fileWait(ip, filename string, lport uint16){
 			data := decrypt_data(fBuffer.Bytes())
 			
 			err := ioutil.WriteFile(filename, data, 0644)
-			check(err)
+			checkError(err)
 
 			fmt.Print(string(data))
 			fmt.Printf("File transfer completed. Transfered: %d bytes", fBuffer.Len())
