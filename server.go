@@ -176,7 +176,7 @@ func beginListen(ip string, port, lport uint16) {
 				checkError(err)
 			} else if incomingIP == ip && uint16(udpLayer.DstPort) == SND_CMPLETE {
 				data := decrypt_data(buffer.Bytes())
-				fmt.Print(data)
+				fmt.Print(string(data))
 				buffer.Reset()
 			}
 		} else {
