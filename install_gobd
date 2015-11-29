@@ -13,7 +13,7 @@ go get github.com/google/gopacket/layers
 go get github.com/google/gopacket/pcap
 go get golang.org/x/crypto/ssh/terminal
 echo "Grabbing and compiling repo..."
-git clone https://github.com/razc411/gobd.git
-cd gobd
+git clone https://github.com/razc411/GoBD.git
+cd GoBD
 git checkout master
 go build			
