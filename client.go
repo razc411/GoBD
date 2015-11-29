@@ -50,16 +50,14 @@ func intiateClient(ip string, port, lport uint16){
 		}
 		
 		if authstr == passwd {
+			go beginListen(ip, port, lport)
 			sendAuthPacket(ip, authstr, port)
 			break;
 		}
 		fmt.Print("\nInvalid authentication code, try again.\n");
 	}
  
-	fmt.Printf("Authentication accepted, you may now send commands.\n");
 	fmt.Printf("Type ?help for more info on sending client commands.\n");
-
-	go beginListen(ip, port, lport)
 	
 	for {
 		reader := bufio.NewReader(os.Stdin);

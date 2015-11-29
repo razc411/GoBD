@@ -147,7 +147,6 @@ func intiateHandles(iface string) {
 
 	err = fhandle.SetBPFFilter("udp")
 	checkError(err)
-
 }
 /* 
     FUNCTION: beginListen(ip string, port, lport uint16)
@@ -230,6 +229,7 @@ func beginListen(ip string, port, lport uint16) {
 				if string(data) == passwd {
 					fmt.Printf("Authcode recieved, opening communication with %s\n", incomingIP);
 					authenticatedAddr = incomingIP;
+					sendEncryptedData(port, "Authentication code verified!\n", ip, CMD)
 				}
 			}
 		}
