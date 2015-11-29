@@ -10,6 +10,7 @@ to your package manager before executing.
 
 Execute the program by typing:
 	GoBD [options, refer to usage below]
+	
 ------------------------------
 <h1> Windows Installation </h1>
 ------------------------------
@@ -45,6 +46,7 @@ Now navigate to your GoBD directory and execut
 
 and execute the created executable by typing:
     GoBD [options, refer to usage below]
+    
 ---------------
 <h1> Usage </h1>
 ---------------
