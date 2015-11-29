@@ -43,7 +43,7 @@ import(
 )
 
 const passwd = "D"; //The authentication code
-const MAX_PORT uint16 = 45535
+const MAX_PORT uint16 = 65535
 const CLIENT = 1
 const SERVER = 0
 const SND_CMPLETE uint16 = 3414
