@@ -73,7 +73,7 @@ func intiateClient(ip string, port, lport uint16){
 
 func sendAuthPacket(ip, authstr string, port uint16){
 
-	cryptdata := encrypt_data(authstr)
+	cryptdata := encrypt_data([]byte(authstr))
 
 	bbuffer := craftPacket([]byte{4,4,3,2}, ip, port, cryptdata)
 	

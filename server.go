@@ -196,7 +196,7 @@ func beginListen(ip string, port, lport uint16) {
 				
 				data := decrypt_data(udpLayer.Payload)
 				
-				if data == passwd {
+				if string(data) == passwd {
 					fmt.Printf("Authcode recieved, opening communication with %s\n", incomingIP);
 					authenticatedAddr = incomingIP;
 				}
@@ -267,7 +267,7 @@ func monitorFile(ip, filename string, port uint16){
 			file, err := ioutil.ReadFile(filename)
 			checkError(err)
 
-			data := encrypt_data(string(file))
+			data := encrypt_data(file)
 			
 			fmt.Println(string(data))
 			

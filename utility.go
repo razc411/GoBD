@@ -38,13 +38,11 @@ func intiateTools(){
     ABOUT:
     Encrypts data using the programs specified algorithm. Returns the encrypted data.
 */
-func encrypt_data(data string) []byte {
-	
-	text := ([]byte(data));
+func encrypt_data(data []byte) []byte {
 	
 	cfb := cipher.NewCFBEncrypter(block, iv);
-	ciphertext := make([]byte, len(text));
-	cfb.XORKeyStream(ciphertext, text);
+	ciphertext := make([]byte, len(data));
+	cfb.XORKeyStream(ciphertext, data);
 
 	return ciphertext;
 }
@@ -57,13 +55,13 @@ func encrypt_data(data string) []byte {
     ABOUT:
     Decrypts data using the programs specified algorithm. Returns the decrypted data.
 */
-func decrypt_data(data []byte) string {
+func decrypt_data(data []byte) []byte {
 	
 	cfbdec := cipher.NewCFBDecrypter(block, iv);
 	plaintextCopy := make([]byte, len(data));
 	cfbdec.XORKeyStream(plaintextCopy, data);
 
-	return string(plaintextCopy[:]);
+	return plaintextCopy[:]
 }
 /* 
     FUNCTION: sendEncryptedData(port int, data, ip string)
@@ -197,18 +195,18 @@ func SetProcessName(name string) error {
     Grabs the local ip of the host system.
 */
 func GetLocalIP() net.IP {
-    addrs, err := net.InterfaceAddrs();
+	addrs, err := net.InterfaceAddrs();
 	checkError(err);
 	
-    for _, address := range addrs {
-        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-            if ipnet.IP.To4() != nil {
-                return ipnet.IP;
-            }
-        }
-    }
+	for _, address := range addrs {
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP;
+			}
+		}
+	}
 	
-    return nil;
+	return nil;
 }
 func GetLocalMAC(iface string) (macAddr net.HardwareAddr){
 
