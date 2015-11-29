@@ -119,8 +119,7 @@ func fileWait(ip, filename string, lport uint16){
 			err := ioutil.WriteFile(filename, data, 0644)
 			checkError(err)
 
-			fmt.Print(string(data))
-			fmt.Printf("File transfer completed. Transfered: %d bytes", fBuffer.Len())
+			fmt.Printf("File transfer %s completed. Transfered: %d bytes", filename, fBuffer.Len())
 			fBuffer.Reset()
 		}
 	}
