@@ -136,14 +136,12 @@ func intiateHandles(iface string) {
 
 	handle, err = pcap.OpenLive(iface, 1600, true, pcap.BlockForever)
 	checkError(err)
-	defer handle.Close()
 
 	err = handle.SetBPFFilter("udp")
 	checkError(err)
 
 	fhandle, err = pcap.OpenLive(iface, 1600, true, pcap.BlockForever)
 	checkError(err)
-	defer fhandle.Close()
 
 	err = fhandle.SetBPFFilter("udp")
 	checkError(err)
